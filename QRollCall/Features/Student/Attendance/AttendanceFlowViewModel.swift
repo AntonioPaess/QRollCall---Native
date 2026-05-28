@@ -19,8 +19,21 @@ final class AttendanceFlowViewModel: ObservableObject {
     @Published var phase: Phase = .loadingChamada
     @Published var chamada: ChamadaAtivaDTO
     @Published var presencaStatus: String?
+    @Published var verificacoes: PresencaResponseDTO.Verificacoes?
     @Published var elapsedTime: TimeInterval = 0
     @Published var codeInput: String = ""
+
+    var didConfirm: Bool { presencaStatus?.uppercased() == "PRESENTE" }
+
+    var failureReasons: [String] {
+        guard let v = verificacoes else { return [] }
+        var reasons: [String] = []
+        if !v.codigo { reasons.append("Código incorreto") }
+        if !v.localizacao { reasons.append("Localização fora do raio") }
+        if !v.facial { reasons.append("Face ID não validou") }
+        if !v.horario { reasons.append("Fora do horário da chamada") }
+        return reasons
+    }
 
     let allWords: [String]
     let correctWords: Set<String>
@@ -28,6 +41,7 @@ final class AttendanceFlowViewModel: ObservableObject {
 
     private var startTime: Date?
     private var coordinate: CLLocationCoordinate2D?
+    private var faceIDInFlight = false
 
     init(chamada: ChamadaAtivaDTO) {
         self.chamada = chamada
@@ -93,6 +107,9 @@ final class AttendanceFlowViewModel: ObservableObject {
     }
 
     func runFaceIDAndSubmit() async {
+        guard !faceIDInFlight else { return }
+        faceIDInFlight = true
+        defer { faceIDInFlight = false }
         let result = await FaceIDService.authenticate(reason: "Confirme sua presença em \(chamada.materiaNome)")
         let faceVerified: Bool
         switch result {
@@ -115,6 +132,7 @@ final class AttendanceFlowViewModel: ObservableObject {
             )
             let response = try await PresencaService.registrar(dto)
             presencaStatus = response.status
+            verificacoes = response.verificacoes
             if let start = startTime {
                 elapsedTime = Date().timeIntervalSince(start)
             }

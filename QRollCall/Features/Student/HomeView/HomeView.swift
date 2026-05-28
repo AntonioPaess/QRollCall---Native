@@ -23,7 +23,9 @@ struct HomeView: View {
         .background(AppColors.background)
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
-        .fullScreenCover(item: $selectedAttendance) { attendance in
+        .fullScreenCover(item: $selectedAttendance, onDismiss: {
+            Task { await viewModel.load() }
+        }) { attendance in
             AttendanceFlowView(attendance: attendance)
         }
     }

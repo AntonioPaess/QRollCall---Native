@@ -45,17 +45,14 @@ struct AttendanceFlowView: View {
 
                 case .faceID, .submitting:
                     submittingView
-                        .task(id: viewModel.phase) {
-                            if viewModel.phase == .faceID {
-                                await viewModel.runFaceIDAndSubmit()
-                            }
-                        }
 
                 case .confirmed:
                     AttendanceConfirmedView(
                         className: viewModel.chamada.materiaNome,
                         time: viewModel.chamada.startTime,
-                        elapsedTime: viewModel.elapsedTime
+                        elapsedTime: viewModel.elapsedTime,
+                        didConfirm: viewModel.didConfirm,
+                        failureReasons: viewModel.failureReasons
                     ) {
                         dismiss()
                     }
@@ -67,6 +64,11 @@ struct AttendanceFlowView: View {
             .task {
                 if viewModel.phase == .loadingChamada {
                     await viewModel.bootstrap()
+                }
+            }
+            .onChange(of: viewModel.phase) { _, new in
+                if new == .faceID {
+                    Task { await viewModel.runFaceIDAndSubmit() }
                 }
             }
             .toolbar {
@@ -141,7 +143,7 @@ struct AttendanceFlowView: View {
             }
 
             TextField("Código", text: $viewModel.codeInput)
-                .textCase(.uppercase)
+                .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .multilineTextAlignment(.center)
                 .font(.system(size: AppDimens.fontTitle1, weight: .bold))

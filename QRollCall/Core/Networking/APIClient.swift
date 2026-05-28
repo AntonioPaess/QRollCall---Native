@@ -88,6 +88,10 @@ final class APIClient {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: req)
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            throw CancellationError()
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw APIError.transport(error)
         }

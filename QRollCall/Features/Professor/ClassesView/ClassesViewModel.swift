@@ -13,6 +13,9 @@ final class ClassesViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             turmas = try await ProfessorService.turmas()
+        } catch is CancellationError {
+            return
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Não foi possível carregar."
         }
@@ -35,6 +38,9 @@ final class ClassDetailViewModel: ObservableObject {
         do {
             detalhe = try await det
             historico = try await hist
+        } catch is CancellationError {
+            return
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Não foi possível carregar."
         }

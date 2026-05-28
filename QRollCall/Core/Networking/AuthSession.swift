@@ -30,7 +30,7 @@ final class AuthSession: ObservableObject {
 
     var isAuthenticated: Bool { token != nil }
 
-    func apply(_ response: LoginResponseDTO, requestedRole: UserRole) {
+    func apply(_ response: LoginResponseDTO) {
         token = response.accessToken
         firstName = response.firstName ?? splitName(response.username).0
         lastName = response.lastName ?? splitName(response.username).1
@@ -40,8 +40,7 @@ final class AuthSession: ObservableObject {
         let resolved: UserRole = {
             let raw = response.role.lowercased()
             if raw.contains("prof") { return .professor }
-            if raw.contains("aluno") || raw.contains("student") { return .student }
-            return requestedRole
+            return .student
         }()
         role = resolved
         storedRole = resolved.rawValue

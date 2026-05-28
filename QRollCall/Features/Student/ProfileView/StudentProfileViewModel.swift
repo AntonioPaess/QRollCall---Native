@@ -17,6 +17,9 @@ final class StudentProfileViewModel: ObservableObject {
         do {
             perfil = try await p
             stats = try await s
+        } catch is CancellationError {
+            return
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Não foi possível carregar."
         }

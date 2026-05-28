@@ -64,6 +64,7 @@ struct ChamadaAtivaDTO: Decodable, Identifiable {
     let startTime: String
     let timeRemainingSec: Int64
     let jaRegistrouPresenca: Bool
+    let keywords: [String]?
 
     var id: Int64 { idChamada }
 }

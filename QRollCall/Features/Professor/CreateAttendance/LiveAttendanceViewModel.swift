@@ -72,6 +72,9 @@ final class LiveAttendanceViewModel: ObservableObject {
             )
             didClose = true
             stop()
+        } catch is CancellationError {
+            return
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Não foi possível encerrar."
         }

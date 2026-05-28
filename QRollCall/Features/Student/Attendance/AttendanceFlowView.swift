@@ -198,6 +198,7 @@ struct AttendanceFlowView: View {
         classType: "PRIMEIRA",
         startTime: "10:00",
         timeRemainingSec: 600,
-        jaRegistrouPresenca: false
+        jaRegistrouPresenca: false,
+        keywords: ["HTML", "CSS", "JavaScript", "React"]
     ))
 }

@@ -24,15 +24,24 @@ final class AttendanceFlowViewModel: ObservableObject {
 
     let allWords: [String]
     let correctWords: Set<String>
+    let hasGamification: Bool
 
     private var startTime: Date?
     private var coordinate: CLLocationCoordinate2D?
 
     init(chamada: ChamadaAtivaDTO) {
         self.chamada = chamada
-        let (correct, all) = AttendanceFlowViewModel.shuffleWords()
-        self.allWords = all
-        self.correctWords = Set(correct)
+        let real = chamada.keywords?.filter { !$0.isEmpty } ?? []
+        if real.isEmpty {
+            self.hasGamification = false
+            self.correctWords = []
+            self.allWords = []
+        } else {
+            self.hasGamification = true
+            self.correctWords = Set(real)
+            let distractors = AttendanceFlowViewModel.randomDistractors(excluding: real, count: max(real.count, 4))
+            self.allWords = (real + distractors).shuffled()
+        }
     }
 
     func bootstrap() async {
@@ -48,14 +57,17 @@ final class AttendanceFlowViewModel: ObservableObject {
                 phase = .outOfRange
                 return
             }
-            phase = .gamification
-            startTime = Date()
+            advancePastLocation()
         } catch {
-            // sem permissão / falha — segue com (0,0) para deixar o backend decidir
+            // sem permissão / falha — segue com (0,0) para o backend decidir
             self.coordinate = CLLocationCoordinate2D(latitude: 0, longitude: 0)
-            phase = .gamification
-            startTime = Date()
+            advancePastLocation()
         }
+    }
+
+    private func advancePastLocation() {
+        startTime = Date()
+        phase = hasGamification ? .gamification : .codeEntry
     }
 
     func retryRange() {
@@ -107,14 +119,21 @@ final class AttendanceFlowViewModel: ObservableObject {
                 elapsedTime = Date().timeIntervalSince(start)
             }
             phase = .confirmed
+        } catch is CancellationError {
+            return
         } catch {
             phase = .error((error as? LocalizedError)?.errorDescription ?? "Falha ao registrar presença.")
         }
     }
 
-    private static func shuffleWords() -> (correct: [String], shuffled: [String]) {
-        let correct = ["HTML", "CSS", "JavaScript", "React"]
-        let distractors = ["FUTEBOL", "RECEITA", "CINEMA", "PRAIA", "MÚSICA", "VIAGEM"]
-        return (correct, (correct + distractors).shuffled())
+    private static func randomDistractors(excluding correct: [String], count: Int) -> [String] {
+        let pool = ["FUTEBOL", "RECEITA", "CINEMA", "PRAIA", "MÚSICA", "VIAGEM",
+                    "JOGO", "NOVELA", "PIZZA", "SÉRIE", "CARRO", "LIVRO",
+                    "FESTA", "CAFÉ", "MAR", "MONTANHA"]
+        let correctSet = Set(correct.map { $0.uppercased() })
+        return pool.filter { !correctSet.contains($0.uppercased()) }
+                   .shuffled()
+                   .prefix(count)
+                   .map { $0 }
     }
 }

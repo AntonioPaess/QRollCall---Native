@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import CoreLocation
 
 @MainActor
 final class CreateAttendanceViewModel: ObservableObject {
@@ -21,6 +22,9 @@ final class CreateAttendanceViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             turmas = try await ProfessorService.turmas()
+        } catch is CancellationError {
+            return
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Não foi possível carregar."
         }
@@ -43,13 +47,14 @@ final class CreateAttendanceViewModel: ObservableObject {
             .split(whereSeparator: { ",;\n".contains($0) })
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+        let coord = try? await LocationProvider.shared.requestCoordinate()
         let dto = RegisterChamadaRequestDTO(
             horarios: nil,
             turma: turma.nome,
             segundos: durationMinutes * 60,
             materiaId: turma.id,
-            latitude: nil,
-            longitude: nil,
+            latitude: coord?.latitude,
+            longitude: coord?.longitude,
             classType: classType.backendValue,
             sala: sala.isEmpty ? turma.sala : sala,
             keywords: keywords

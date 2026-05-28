@@ -23,6 +23,9 @@ final class StudentHomeViewModel: ObservableObject {
             stats = try await stat
             activities = try await acts
             activeAttendances = try await ativas
+        } catch is CancellationError {
+            return
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Não foi possível carregar."
         }

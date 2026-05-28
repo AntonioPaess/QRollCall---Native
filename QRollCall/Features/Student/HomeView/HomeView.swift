@@ -81,6 +81,7 @@ struct HomeView: View {
             recentActivitySection
         }
         .padding(.horizontal, AppDimens.spacingXXL)
+        .padding(.top, AppDimens.spacingXL)
         .padding(.bottom, AppDimens.spacingXXL)
     }
 
@@ -172,6 +173,7 @@ struct HomeView: View {
                     .foregroundColor(AppColors.textSecondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppDimens.spacingXL)
         .background(AppColors.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))

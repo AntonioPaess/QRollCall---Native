@@ -23,6 +23,9 @@ final class StudentHistoryViewModel: ObservableObject {
             let data = try await AlunoService.historico(filtro: raw)
             summary = data.summary
             entries = data.entries
+        } catch is CancellationError {
+            return
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Não foi possível carregar."
         }

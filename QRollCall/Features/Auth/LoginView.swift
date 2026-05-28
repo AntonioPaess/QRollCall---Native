@@ -12,7 +12,6 @@ struct LoginView: View {
 
     @State private var email = ""
     @State private var password = ""
-    @State private var selectedRole: UserRole = .student
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -35,10 +34,6 @@ struct LoginView: View {
             }
 
             Spacer()
-
-            rolePicker
-
-            Spacer().frame(height: AppDimens.spacingXXL)
 
             loginButton
 
@@ -113,34 +108,6 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Role Picker
-
-    private var rolePicker: some View {
-        HStack(spacing: 0) {
-            roleButton(role: .student, label: AppStrings.iAmStudent)
-            roleButton(role: .professor, label: AppStrings.iAmProfessor)
-        }
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-    }
-
-    private func roleButton(role: UserRole, label: String) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedRole = role
-            }
-        } label: {
-            Text(label)
-                .font(.system(size: AppDimens.fontSmall, weight: selectedRole == role ? .semibold : .regular))
-                .foregroundColor(selectedRole == role ? .white : AppColors.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppDimens.spacingMD)
-                .background(selectedRole == role ? AppColors.primary : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Login Button
 
     private var loginButton: some View {
@@ -177,10 +144,9 @@ struct LoginView: View {
         do {
             let response = try await AuthService.login(
                 email: email.trimmingCharacters(in: .whitespaces),
-                password: password,
-                role: selectedRole
+                password: password
             )
-            auth.apply(response, requestedRole: selectedRole)
+            auth.apply(response)
         } catch let APIError.server(_, message) {
             errorMessage = friendly(message) ?? "Email ou senha inválidos."
         } catch APIError.unauthorized {

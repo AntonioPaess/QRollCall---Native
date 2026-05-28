@@ -13,6 +13,9 @@ final class ProfessorProfileViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             perfil = try await ProfessorService.perfil()
+        } catch is CancellationError {
+            return
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Não foi possível carregar."
         }

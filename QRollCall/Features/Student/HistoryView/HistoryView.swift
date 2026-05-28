@@ -8,21 +8,7 @@
 import SwiftUI
 
 struct HistoryView: View {
-    @State private var selectedFilter: HistoryFilter = .todas
-
-    private let summary = HistoryMockData.summary
-    private let entries = HistoryMockData.entries
-
-    private var filteredEntries: [HistoryEntry] {
-        switch selectedFilter {
-        case .todas:
-            return entries
-        case .presente:
-            return entries.filter { $0.status == .presente }
-        case .ausente:
-            return entries.filter { $0.status == .ausente }
-        }
-    }
+    @StateObject private var viewModel = StudentHistoryViewModel()
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -37,6 +23,8 @@ struct HistoryView: View {
             .padding(.bottom, AppDimens.spacingXXL)
         }
         .background(AppColors.background)
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
     }
 
     // MARK: - Header
@@ -59,11 +47,12 @@ struct HistoryView: View {
         Menu {
             ForEach(HistoryFilter.allCases, id: \.self) { filter in
                 Button {
-                    selectedFilter = filter
+                    viewModel.filter = filter
+                    Task { await viewModel.load() }
                 } label: {
                     HStack {
                         Text(filter.rawValue)
-                        if selectedFilter == filter {
+                        if viewModel.filter == filter {
                             Image(systemName: AppIcons.checkCircleFill)
                         }
                     }
@@ -75,7 +64,7 @@ struct HistoryView: View {
                     .font(.system(size: AppDimens.iconMD, weight: .medium))
                     .foregroundColor(AppColors.textPrimary)
 
-                Text(selectedFilter.rawValue)
+                Text(viewModel.filter.rawValue)
                     .font(.system(size: AppDimens.fontCallout, weight: .medium))
                     .foregroundColor(AppColors.textPrimary)
 
@@ -97,15 +86,15 @@ struct HistoryView: View {
 
     private var summaryCard: some View {
         HStack(spacing: 0) {
-            SummaryColumn(value: "\(summary.presences)", label: AppStrings.presences)
+            SummaryColumn(value: "\(viewModel.summary?.presences ?? 0)", label: AppStrings.presences)
 
             divider
 
-            SummaryColumn(value: "\(summary.absences)", label: AppStrings.absences)
+            SummaryColumn(value: "\(viewModel.summary?.absences ?? 0)", label: AppStrings.absences)
 
             divider
 
-            SummaryColumn(value: "\(summary.rate)%", label: AppStrings.rate)
+            SummaryColumn(value: "\(viewModel.summary?.rate ?? 0)%", label: AppStrings.rate)
         }
         .padding(.vertical, AppDimens.spacingXL)
         .background(
@@ -129,8 +118,14 @@ struct HistoryView: View {
 
     private var entriesList: some View {
         VStack(spacing: AppDimens.spacingMD) {
-            ForEach(filteredEntries) { entry in
-                HistoryEntryRow(entry: entry)
+            if viewModel.entries.isEmpty && !viewModel.isLoading {
+                Text("Sem registros para este filtro.")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
+            } else {
+                ForEach(viewModel.entries) { entry in
+                    HistoryEntryRow(entry: entry)
+                }
             }
         }
     }
@@ -159,29 +154,22 @@ private struct SummaryColumn: View {
 // MARK: - History Entry Row
 
 private struct HistoryEntryRow: View {
-    let entry: HistoryEntry
+    let entry: HistoricoEntryDTO
+
+    private var isPresente: Bool {
+        entry.status.lowercased() == "presente"
+    }
 
     private var statusColor: Color {
-        switch entry.status {
-        case .presente: return AppColors.success
-        case .ausente: return AppColors.error
-        case .justificado: return AppColors.warning
-        }
+        isPresente ? AppColors.success : AppColors.error
     }
 
     private var statusText: String {
-        switch entry.status {
-        case .presente: return AppStrings.present
-        case .ausente: return "Falta"
-        case .justificado: return AppStrings.justified
-        }
+        isPresente ? AppStrings.present : "Falta"
     }
 
     private var statusIcon: String {
-        switch entry.status {
-        case .presente: return AppIcons.checkCircleFill
-        case .ausente, .justificado: return AppIcons.xCircleFill
-        }
+        isPresente ? AppIcons.checkCircleFill : AppIcons.xCircleFill
     }
 
     var body: some View {
@@ -191,7 +179,7 @@ private struct HistoryEntryRow: View {
                     .font(.system(size: AppDimens.fontCallout, weight: .semibold))
                     .foregroundColor(AppColors.textPrimary)
 
-                Text("\(entry.date) • \(entry.time) • \(entry.room)")
+                Text("\(entry.date) • \(entry.time) • \(entry.sala)")
                     .font(.system(size: AppDimens.fontCaption, weight: .regular))
                     .foregroundColor(AppColors.textSecondary)
             }

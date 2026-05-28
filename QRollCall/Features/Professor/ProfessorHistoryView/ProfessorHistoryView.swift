@@ -8,25 +8,7 @@
 import SwiftUI
 
 struct ProfessorHistoryView: View {
-    @State private var selectedFilter = "Todas"
-    private let pastAttendances = ProfessorHomeMockData.pastAttendances
-    private let classes = ProfessorHomeMockData.classes
-
-    private var filters: [String] {
-        ["Todas"] + classes.map(\.name)
-    }
-
-    private var filteredAttendances: [PastAttendance] {
-        if selectedFilter == "Todas" { return pastAttendances }
-        return pastAttendances.filter { $0.className == selectedFilter }
-    }
-
-    private var totalPresent: Int { filteredAttendances.reduce(0) { $0 + $1.presentCount } }
-    private var totalStudents: Int { filteredAttendances.reduce(0) { $0 + $1.totalCount } }
-    private var averageRate: Int {
-        guard totalStudents > 0 else { return 0 }
-        return Int(round(Double(totalPresent) / Double(totalStudents) * 100))
-    }
+    @StateObject private var viewModel = ProfessorHistoryViewModel()
 
     var body: some View {
         NavigationStack {
@@ -46,20 +28,20 @@ struct ProfessorHistoryView: View {
             .background(AppColors.background)
             .navigationTitle(AppStrings.historyTitle)
             .navigationBarTitleDisplayMode(.large)
+            .task { await viewModel.load() }
+            .refreshable { await viewModel.load() }
         }
     }
 
-    // MARK: - Filter
-
     private var filterMenu: some View {
         Menu {
-            ForEach(filters, id: \.self) { filter in
+            ForEach(viewModel.availableFilters, id: \.self) { filter in
                 Button {
-                    selectedFilter = filter
+                    viewModel.selectedFilter = filter
                 } label: {
                     HStack {
                         Text(filter)
-                        if selectedFilter == filter {
+                        if viewModel.selectedFilter == filter {
                             Image(systemName: AppIcons.checkCircleFill)
                         }
                     }
@@ -70,7 +52,7 @@ struct ProfessorHistoryView: View {
                 Image(systemName: AppIcons.filter)
                     .font(.system(size: AppDimens.iconMD, weight: .medium))
                     .foregroundColor(AppColors.textPrimary)
-                Text(selectedFilter)
+                Text(viewModel.selectedFilter)
                     .font(.system(size: AppDimens.fontCallout, weight: .medium))
                     .foregroundColor(AppColors.textPrimary)
                 Spacer()
@@ -86,12 +68,10 @@ struct ProfessorHistoryView: View {
         }
     }
 
-    // MARK: - Summary
-
     private var summaryCard: some View {
         HStack(spacing: 0) {
             VStack(spacing: AppDimens.spacingXS) {
-                Text("\(filteredAttendances.count)")
+                Text("\(viewModel.filtered.count)")
                     .font(.system(size: AppDimens.fontTitle1, weight: .bold))
                     .foregroundColor(.white)
                 Text(AppStrings.classesGiven)
@@ -103,7 +83,7 @@ struct ProfessorHistoryView: View {
             Rectangle().fill(.white.opacity(0.25)).frame(width: 1, height: 40)
 
             VStack(spacing: AppDimens.spacingXS) {
-                Text("\(averageRate)%")
+                Text("\(viewModel.averageRate)%")
                     .font(.system(size: AppDimens.fontTitle1, weight: .bold))
                     .foregroundColor(.white)
                 Text(AppStrings.averagePresence)
@@ -124,54 +104,61 @@ struct ProfessorHistoryView: View {
         .shadow(color: AppColors.primary.opacity(0.3), radius: 10, y: 4)
     }
 
-    // MARK: - List
-
     private var attendancesList: some View {
         VStack(spacing: AppDimens.spacingMD) {
-            ForEach(filteredAttendances) { attendance in
+            if viewModel.filtered.isEmpty && !viewModel.isLoading {
+                Text("Sem chamadas registradas.")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
+            }
+            ForEach(viewModel.filtered) { attendance in
                 NavigationLink(destination: AttendanceDetailView(attendance: attendance)) {
-                    HStack(spacing: AppDimens.spacingSM + 6) {
-                        ZStack {
-                            Circle()
-                                .fill(AppColors.primaryOpacity(0.12))
-                                .frame(width: AppDimens.activityIconSize, height: AppDimens.activityIconSize)
-                            Image(systemName: AppIcons.doc)
-                                .font(.system(size: AppDimens.iconLG))
-                                .foregroundColor(AppColors.primary)
-                        }
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(attendance.className)
-                                .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                                .foregroundColor(AppColors.textPrimary)
-                            Text("\(attendance.date) • \(attendance.time) • \(attendance.classType.rawValue)")
-                                .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                                .foregroundColor(AppColors.textSecondary)
-                        }
-
-                        Spacer()
-
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(attendance.presentCount)/\(attendance.totalCount)")
-                                .font(.system(size: AppDimens.fontSmall, weight: .bold))
-                                .foregroundColor(AppColors.textPrimary)
-                            Text("\(attendance.presencePercentage)%")
-                                .font(.system(size: AppDimens.fontCaption, weight: .medium))
-                                .foregroundColor(AppColors.success)
-                        }
-
-                        Image(systemName: AppIcons.chevronRight)
-                            .font(.system(size: AppDimens.iconSM))
-                            .foregroundColor(AppColors.textTertiary)
-                    }
-                    .padding(AppDimens.spacingLG)
-                    .background(AppColors.cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-                    .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+                    row(attendance)
                 }
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private func row(_ attendance: ChamadaPassadaDTO) -> some View {
+        HStack(spacing: AppDimens.spacingSM + 6) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.primaryOpacity(0.12))
+                    .frame(width: AppDimens.activityIconSize, height: AppDimens.activityIconSize)
+                Image(systemName: AppIcons.doc)
+                    .font(.system(size: AppDimens.iconLG))
+                    .foregroundColor(AppColors.primary)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(attendance.className)
+                    .font(.system(size: AppDimens.fontCallout, weight: .semibold))
+                    .foregroundColor(AppColors.textPrimary)
+                Text("\(attendance.date) • \(attendance.time)\(attendance.classType.map { " • \($0)" } ?? "")")
+                    .font(.system(size: AppDimens.fontCaption, weight: .regular))
+                    .foregroundColor(AppColors.textSecondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(attendance.presentCount)/\(attendance.totalCount)")
+                    .font(.system(size: AppDimens.fontSmall, weight: .bold))
+                    .foregroundColor(AppColors.textPrimary)
+                Text("\(attendance.presencePercentage)%")
+                    .font(.system(size: AppDimens.fontCaption, weight: .medium))
+                    .foregroundColor(AppColors.success)
+            }
+
+            Image(systemName: AppIcons.chevronRight)
+                .font(.system(size: AppDimens.iconSM))
+                .foregroundColor(AppColors.textTertiary)
+        }
+        .padding(AppDimens.spacingLG)
+        .background(AppColors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
+        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
     }
 }
 

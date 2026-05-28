@@ -7,231 +7,197 @@
 
 import SwiftUI
 
-enum AttendanceStep {
-    case mockChoice
-    case checkingRange
-    case outOfRange
-    case gamification
-    case gamificationFail
-    case faceID
-    case confirmed
-}
-
 struct AttendanceFlowView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var currentStep: AttendanceStep = .mockChoice
-    @State private var startTime = Date()
-    @State private var mockWillFail = false
+    @StateObject private var viewModel: AttendanceFlowViewModel
 
-    private let attendance = AttendanceMockData.activeAttendance
+    init(attendance: ChamadaAtivaDTO) {
+        _viewModel = StateObject(wrappedValue: AttendanceFlowViewModel(chamada: attendance))
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                switch currentStep {
-                case .mockChoice:
-                    mockChoiceView
-
-                case .checkingRange:
-                    ZStack {
-                        AppColors.background.ignoresSafeArea()
-                        ProgressView().tint(AppColors.primary)
-                    }
-                    .onAppear { checkRange() }
+                switch viewModel.phase {
+                case .loadingChamada:
+                    loadingView
 
                 case .outOfRange:
                     OutOfRangeView {
-                        currentStep = .checkingRange
-                        AttendanceMockData.isInBluetoothRange = true
+                        viewModel.retryRange()
                     }
 
                 case .gamification:
                     GamificationView(
-                        words: attendance.allWords,
-                        correctWords: Set(attendance.correctWords),
-                        onSuccess: {
-                            startTime = Date()
-                            currentStep = .faceID
-                        },
-                        onFailure: {
-                            currentStep = .gamificationFail
-                        }
+                        words: viewModel.allWords,
+                        correctWords: viewModel.correctWords,
+                        onSuccess: { viewModel.gamificationSucceeded() },
+                        onFailure: { viewModel.gamificationFailed() }
                     )
 
                 case .gamificationFail:
                     GamificationFailView {
-                        currentStep = .gamification
+                        viewModel.retryGamification()
                     }
 
-                case .faceID:
-                    FaceIDCheckView(
-                        onSuccess: {
-                            currentStep = .confirmed
+                case .codeEntry:
+                    codeEntryView
+
+                case .faceID, .submitting:
+                    submittingView
+                        .task(id: viewModel.phase) {
+                            if viewModel.phase == .faceID {
+                                await viewModel.runFaceIDAndSubmit()
+                            }
                         }
-                    )
 
                 case .confirmed:
                     AttendanceConfirmedView(
-                        className: attendance.className,
-                        time: attendance.startTime,
-                        elapsedTime: Date().timeIntervalSince(startTime)
+                        className: viewModel.chamada.materiaNome,
+                        time: viewModel.chamada.startTime,
+                        elapsedTime: viewModel.elapsedTime
                     ) {
                         dismiss()
                     }
+
+                case .error(let message):
+                    errorView(message)
+                }
+            }
+            .task {
+                if viewModel.phase == .loadingChamada {
+                    await viewModel.bootstrap()
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if currentStep != .confirmed && currentStep != .faceID {
+                    if !isTerminalPhase {
                         Button {
                             dismiss()
                         } label: {
                             Image(systemName: AppIcons.arrowBack)
-                                .foregroundColor(currentStep == .outOfRange || currentStep == .gamificationFail || currentStep == .checkingRange ? .white : AppColors.textPrimary)
+                                .foregroundColor(AppColors.textPrimary)
                         }
                     }
                 }
 
                 ToolbarItem(placement: .principal) {
-                    if currentStep == .gamification || currentStep == .mockChoice {
-                        Text(attendance.className)
-                            .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                    }
+                    Text(viewModel.chamada.materiaNome)
+                        .font(.system(size: AppDimens.fontCallout, weight: .semibold))
                 }
             }
         }
     }
 
-    // MARK: - Mock Choice
+    private var isTerminalPhase: Bool {
+        switch viewModel.phase {
+        case .confirmed, .submitting, .faceID: return true
+        default: return false
+        }
+    }
 
-    private var mockChoiceView: some View {
-        VStack(spacing: AppDimens.spacingXXL) {
+    private var loadingView: some View {
+        ZStack {
+            AppColors.background.ignoresSafeArea()
+            VStack(spacing: AppDimens.spacingLG) {
+                ProgressView().tint(AppColors.primary)
+                Text("Validando localização…")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
+            }
+        }
+    }
+
+    private var submittingView: some View {
+        ZStack {
+            AppColors.background.ignoresSafeArea()
+            VStack(spacing: AppDimens.spacingLG) {
+                ProgressView().tint(AppColors.primary)
+                Text("Confirmando presença…")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
+            }
+        }
+    }
+
+    private var codeEntryView: some View {
+        VStack(spacing: AppDimens.spacingXL) {
             Spacer()
 
             VStack(spacing: AppDimens.spacingMD) {
-                Image(systemName: AppIcons.gameController)
+                Image(systemName: AppIcons.lockIcon)
                     .font(.system(size: AppDimens.icon3XL))
                     .foregroundColor(AppColors.primary)
 
-                Text("Modo de teste")
+                Text("Insira o código da chamada")
                     .font(.system(size: AppDimens.fontTitle2, weight: .bold))
                     .foregroundColor(AppColors.textPrimary)
+                    .multilineTextAlignment(.center)
 
-                Text("Escolha o cenário para testar o fluxo de presença")
-                    .font(.system(size: AppDimens.fontBody, weight: .regular))
+                Text("Peça ao professor o código exibido no quadro.")
+                    .font(.system(size: AppDimens.fontBody))
                     .foregroundColor(AppColors.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
+            TextField("Código", text: $viewModel.codeInput)
+                .textCase(.uppercase)
+                .autocorrectionDisabled()
+                .multilineTextAlignment(.center)
+                .font(.system(size: AppDimens.fontTitle1, weight: .bold))
+                .padding(AppDimens.spacingLG)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
+
             Spacer()
 
-            VStack(spacing: AppDimens.spacingMD) {
-                Button {
-                    AttendanceMockData.isInBluetoothRange = false
-                    currentStep = .checkingRange
-                } label: {
-                    HStack(spacing: AppDimens.spacingMD) {
-                        Image(systemName: AppIcons.bluetoothOff)
-                            .font(.system(size: AppDimens.iconLG))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Fora do alcance")
-                                .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                            Text("Simula estar longe da sala")
-                                .font(.system(size: AppDimens.fontCaption))
-                                .foregroundColor(AppColors.textSecondary)
-                        }
-                        Spacer()
-                    }
-                    .foregroundColor(AppColors.error)
-                    .padding(AppDimens.spacingLG)
-                    .background(AppColors.error.opacity(0.08))
+            Button {
+                viewModel.confirmCodeAndProceedToFace()
+            } label: {
+                Text(AppStrings.confirm)
+                    .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: AppDimens.buttonHeight)
+                    .background(viewModel.codeInput.isEmpty ? AppColors.primaryOpacity(0.4) : AppColors.primary)
                     .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppDimens.radiusMD)
-                            .stroke(AppColors.error.opacity(0.2), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    mockWillFail = true
-                    AttendanceMockData.isInBluetoothRange = true
-                    currentStep = .checkingRange
-                } label: {
-                    HStack(spacing: AppDimens.spacingMD) {
-                        Image(systemName: AppIcons.xCircleFill)
-                            .font(.system(size: AppDimens.iconLG))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Falhar na gamificação")
-                                .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                            Text("Resposta errada no desafio")
-                                .font(.system(size: AppDimens.fontCaption))
-                                .foregroundColor(AppColors.textSecondary)
-                        }
-                        Spacer()
-                    }
-                    .foregroundColor(AppColors.warning)
-                    .padding(AppDimens.spacingLG)
-                    .background(AppColors.warning.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppDimens.radiusMD)
-                            .stroke(AppColors.warning.opacity(0.2), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    mockWillFail = false
-                    AttendanceMockData.isInBluetoothRange = true
-                    currentStep = .checkingRange
-                } label: {
-                    HStack(spacing: AppDimens.spacingMD) {
-                        Image(systemName: AppIcons.checkCircleFill)
-                            .font(.system(size: AppDimens.iconLG))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Fluxo completo (sucesso)")
-                                .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                            Text("Gamificação + FaceID + Confirmação")
-                                .font(.system(size: AppDimens.fontCaption))
-                                .foregroundColor(AppColors.textSecondary)
-                        }
-                        Spacer()
-                    }
-                    .foregroundColor(AppColors.success)
-                    .padding(AppDimens.spacingLG)
-                    .background(AppColors.success.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppDimens.radiusMD)
-                            .stroke(AppColors.success.opacity(0.2), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
             }
-            .padding(.horizontal, AppDimens.spacingXXL)
+            .buttonStyle(.plain)
+            .disabled(viewModel.codeInput.isEmpty)
             .padding(.bottom, AppDimens.spacing4XL)
         }
+        .padding(.horizontal, AppDimens.spacingXXL)
         .background(AppColors.background)
     }
 
-    // MARK: - Range Check
-
-    private func checkRange() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation {
-                if !AttendanceMockData.isInBluetoothRange {
-                    currentStep = .outOfRange
-                } else if mockWillFail {
-                    currentStep = .gamificationFail
-                } else {
-                    currentStep = .gamification
-                }
-            }
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: AppDimens.spacingXL) {
+            Image(systemName: AppIcons.xCircleFill)
+                .font(.system(size: 56))
+                .foregroundColor(AppColors.error)
+            Text(message)
+                .font(.system(size: AppDimens.fontBody, weight: .medium))
+                .foregroundColor(AppColors.textPrimary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, AppDimens.spacingXXL)
+            Button("Voltar") { dismiss() }
+                .buttonStyle(.borderedProminent)
+                .tint(AppColors.primary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColors.background)
     }
 }
 
 #Preview {
-    AttendanceFlowView()
+    AttendanceFlowView(attendance: ChamadaAtivaDTO(
+        idChamada: 1,
+        idQrcode: UUID().uuidString,
+        materiaNome: "Programação Web",
+        sala: "Lab 101",
+        classType: "PRIMEIRA",
+        startTime: "10:00",
+        timeRemainingSec: 600,
+        jaRegistrouPresenca: false
+    ))
 }

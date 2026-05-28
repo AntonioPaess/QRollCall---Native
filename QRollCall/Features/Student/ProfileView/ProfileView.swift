@@ -8,10 +8,9 @@
 import SwiftUI
 
 struct ProfileView: View {
-    @AppStorage("isLoggedIn") private var isLoggedIn = false
+    @EnvironmentObject private var auth: AuthSession
+    @StateObject private var viewModel = StudentProfileViewModel()
 
-    private let user = ProfileMockData.user
-    private let stats = ProfileMockData.stats
     private let settingsItems = ProfileMockData.settingsItems
 
     var body: some View {
@@ -23,6 +22,8 @@ struct ProfileView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(AppColors.background)
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
     }
 
     // MARK: - Header
@@ -63,27 +64,17 @@ struct ProfileView: View {
                         .fill(AppColors.primary)
                         .frame(width: 72, height: 72)
                         .overlay(
-                            Text(user.initials)
+                            Text(viewModel.initials)
                                 .font(.system(size: AppDimens.fontTitle1, weight: .bold))
                                 .foregroundColor(.white)
                         )
-
-                    ZStack {
-                        Circle()
-                            .fill(AppColors.primary)
-                            .frame(width: 26, height: 26)
-                        Image(systemName: AppIcons.camera)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    .offset(x: -2, y: 2)
                 }
 
                 VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                    Text(user.fullName)
+                    Text(viewModel.fullName)
                         .font(.system(size: AppDimens.fontTitle2, weight: .bold))
                         .foregroundColor(AppColors.textPrimary)
-                    Text("\(AppStrings.matricula) \(user.matricula)")
+                    Text("\(AppStrings.matricula) \(viewModel.perfil?.matricula ?? "—")")
                         .font(.system(size: AppDimens.fontSmall, weight: .regular))
                         .foregroundColor(AppColors.textSecondary)
                 }
@@ -92,9 +83,9 @@ struct ProfileView: View {
             }
 
             VStack(spacing: AppDimens.spacingMD) {
-                ProfileInfoRow(icon: AppIcons.envelope, text: user.email)
-                ProfileInfoRow(icon: AppIcons.phone, text: user.phone)
-                ProfileInfoRow(icon: AppIcons.graduationCap, text: user.courseInfo)
+                ProfileInfoRow(icon: AppIcons.envelope, text: viewModel.perfil?.email ?? "—")
+                ProfileInfoRow(icon: AppIcons.phone, text: viewModel.perfil?.phone.isEmpty == false ? viewModel.perfil!.phone : "Sem telefone")
+                ProfileInfoRow(icon: AppIcons.graduationCap, text: viewModel.courseInfo)
             }
         }
         .padding(AppDimens.spacingXL)
@@ -108,7 +99,6 @@ struct ProfileView: View {
 
     private var mainContent: some View {
         VStack(spacing: AppDimens.spacingXL) {
-//            facialUpdateCard
             statsSection
             settingsSection
             logoutButton
@@ -118,47 +108,11 @@ struct ProfileView: View {
         .padding(.bottom, AppDimens.spacingXXL)
     }
 
-    // MARK: - Facial Update Card
-
-//    private var facialUpdateCard: some View {
-//        Button(action: {}) {
-//            HStack(spacing: AppDimens.spacingLG) {
-//                ZStack {
-//                    Circle()
-//                        .fill(AppColors.primaryOpacity(0.12))
-//                        .frame(width: AppDimens.activityIconSize, height: AppDimens.activityIconSize)
-//                    Image(systemName: AppIcons.facialUpdate)
-//                        .font(.system(size: AppDimens.iconLG))
-//                        .foregroundColor(AppColors.primary)
-//                }
-//
-//                VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-//                    Text(AppStrings.updateFacialRegistration)
-//                        .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-//                        .foregroundColor(AppColors.textPrimary)
-//                    Text("\(AppStrings.lastUpdate) \(user.facialUpdateDate)")
-//                        .font(.system(size: AppDimens.fontCaption, weight: .regular))
-//                        .foregroundColor(AppColors.textSecondary)
-//                }
-//
-//                Spacer()
-//
-//                Image(systemName: AppIcons.chevronRight)
-//                    .font(.system(size: AppDimens.iconSM, weight: .medium))
-//                    .foregroundColor(AppColors.textTertiary)
-//            }
-//            .padding(AppDimens.spacingLG)
-//            .background(AppColors.cardBackground)
-//            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-//            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-//        }
-//        .buttonStyle(.plain)
-//    }
-
     // MARK: - Stats Section
 
     private var statsSection: some View {
-        VStack(alignment: .leading, spacing: AppDimens.spacingLG) {
+        let s = viewModel.stats
+        return VStack(alignment: .leading, spacing: AppDimens.spacingLG) {
             HStack(spacing: AppDimens.spacingSM) {
                 Image(systemName: AppIcons.statsIcon)
                     .font(.system(size: AppDimens.iconMD))
@@ -175,10 +129,10 @@ struct ProfileView: View {
                 ],
                 spacing: AppDimens.spacingMD
             ) {
-                ProfileStatCell(value: "\(stats.presenceRate)%", label: AppStrings.presenceRate)
-                ProfileStatCell(value: "\(stats.confirmedClasses)", label: AppStrings.confirmedClasses)
-                ProfileStatCell(value: "\(stats.absences)", label: AppStrings.absences)
-                ProfileStatCell(value: "\(stats.consecutiveDays)", label: AppStrings.consecutiveDaysProfile)
+                ProfileStatCell(value: "\(s?.presencePercentage ?? 0)%", label: AppStrings.presenceRate)
+                ProfileStatCell(value: "\(s?.totalClasses ?? 0)", label: AppStrings.confirmedClasses)
+                ProfileStatCell(value: "\(s?.absences ?? 0)", label: AppStrings.absences)
+                ProfileStatCell(value: "\(s?.streakDays ?? 0)", label: AppStrings.consecutiveDaysProfile)
             }
         }
         .padding(AppDimens.spacingXL)
@@ -236,7 +190,7 @@ struct ProfileView: View {
 
     private var logoutButton: some View {
         Button {
-            isLoggedIn = false
+            auth.logout()
         } label: {
             HStack(spacing: AppDimens.spacingSM) {
                 Image(systemName: AppIcons.logout)
@@ -312,4 +266,5 @@ private struct ProfileStatCell: View {
 
 #Preview {
     ProfileView()
+        .environmentObject(AuthSession.shared)
 }

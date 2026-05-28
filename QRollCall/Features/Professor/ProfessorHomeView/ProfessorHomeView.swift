@@ -8,12 +8,9 @@
 import SwiftUI
 
 struct ProfessorHomeView: View {
+    @EnvironmentObject private var auth: AuthSession
+    @StateObject private var viewModel = ProfessorHomeViewModel()
     @State private var showCreateAttendance = false
-
-    private let professor = ProfessorHomeMockData.professor
-    private let nextClass = ProfessorHomeMockData.nextClass
-    private let stats = ProfessorHomeMockData.stats
-    private let pastAttendances = ProfessorHomeMockData.pastAttendances
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -24,11 +21,14 @@ struct ProfessorHomeView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(AppColors.background)
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
         .fullScreenCover(isPresented: $showCreateAttendance) {
             CreateAttendanceView()
         }
         .onReceive(NotificationCenter.default.publisher(for: .dismissAttendanceFlow)) { _ in
             showCreateAttendance = false
+            Task { await viewModel.load() }
         }
     }
 
@@ -48,7 +48,7 @@ struct ProfessorHomeView: View {
                     Text(AppStrings.greeting)
                         .font(.system(size: AppDimens.fontCallout, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
-                    Text("Prof. \(professor.firstName)")
+                    Text("Prof. \(viewModel.perfil?.firstName ?? auth.firstName)")
                         .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
                         .foregroundColor(.white)
                 }
@@ -59,7 +59,7 @@ struct ProfessorHomeView: View {
                     Circle()
                         .fill(.white.opacity(0.25))
                         .frame(width: AppDimens.avatarSize, height: AppDimens.avatarSize)
-                    Text(professor.initials)
+                    Text(auth.initials.isEmpty ? "?" : auth.initials)
                         .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
                         .foregroundColor(.white)
                 }
@@ -72,8 +72,6 @@ struct ProfessorHomeView: View {
         }
         .padding(.bottom, 55)
     }
-
-    // MARK: - Start Attendance Card
 
     private var startAttendanceCard: some View {
         Button {
@@ -113,10 +111,13 @@ struct ProfessorHomeView: View {
         .padding(.horizontal, AppDimens.spacingXXL)
     }
 
-    // MARK: - Main Content
-
     private var mainContent: some View {
         VStack(spacing: AppDimens.spacingXL) {
+            if let msg = viewModel.errorMessage {
+                Text(msg)
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.error)
+            }
             nextClassCard
             statsRow
             recentAttendancesSection
@@ -124,8 +125,6 @@ struct ProfessorHomeView: View {
         .padding(.horizontal, AppDimens.spacingXXL)
         .padding(.bottom, AppDimens.spacingXXL)
     }
-
-    // MARK: - Next Class Card
 
     private var nextClassCard: some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
@@ -138,20 +137,26 @@ struct ProfessorHomeView: View {
                     .foregroundColor(AppColors.textSecondary)
             }
 
-            Text(nextClass.name)
-                .font(.system(size: AppDimens.fontTitle1, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
+            if let next = viewModel.nextClass {
+                Text(next.nome)
+                    .font(.system(size: AppDimens.fontTitle1, weight: .bold))
+                    .foregroundColor(AppColors.textPrimary)
 
-            Text("\(nextClass.startTime) - \(nextClass.endTime) • \(nextClass.room)")
-                .font(.system(size: AppDimens.fontBody, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
+                Text("\(next.startTime) - \(next.endTime) • \(next.sala)")
+                    .font(.system(size: AppDimens.fontBody, weight: .regular))
+                    .foregroundColor(AppColors.textSecondary)
 
-            HStack(spacing: AppDimens.spacingSM) {
-                Image(systemName: AppIcons.people)
-                    .font(.system(size: AppDimens.iconSM))
-                    .foregroundColor(AppColors.primary)
-                Text("\(nextClass.totalStudents) \(AppStrings.students)")
-                    .font(.system(size: AppDimens.fontCaption, weight: .medium))
+                HStack(spacing: AppDimens.spacingSM) {
+                    Image(systemName: AppIcons.people)
+                        .font(.system(size: AppDimens.iconSM))
+                        .foregroundColor(AppColors.primary)
+                    Text("\(next.totalStudents) \(AppStrings.students)")
+                        .font(.system(size: AppDimens.fontCaption, weight: .medium))
+                        .foregroundColor(AppColors.textSecondary)
+                }
+            } else {
+                Text("Sem aulas agendadas")
+                    .font(.system(size: AppDimens.fontBody, weight: .regular))
                     .foregroundColor(AppColors.textSecondary)
             }
         }
@@ -162,30 +167,27 @@ struct ProfessorHomeView: View {
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
     }
 
-    // MARK: - Stats Row
-
     private var statsRow: some View {
-        HStack(spacing: AppDimens.spacingMD) {
+        let s = viewModel.stats
+        return HStack(spacing: AppDimens.spacingMD) {
             StatCard(
                 icon: AppIcons.chartUp,
                 iconColor: AppColors.success,
                 title: AppStrings.averagePresence,
-                value: "\(stats.averagePresence)%",
-                subtitle: "+2% este mês",
+                value: "\(s?.averagePresence ?? 0)%",
+                subtitle: AppStrings.thisSemester,
                 subtitleColor: AppColors.success
             )
             StatCard(
                 icon: AppIcons.doc,
                 iconColor: AppColors.primary,
                 title: AppStrings.classesGiven,
-                value: "\(stats.classesGiven)",
+                value: "\(s?.classesGiven ?? 0)",
                 subtitle: AppStrings.thisSemester,
                 subtitleColor: AppColors.textSecondary
             )
         }
     }
-
-    // MARK: - Recent Attendances
 
     private var recentAttendancesSection: some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
@@ -193,17 +195,21 @@ struct ProfessorHomeView: View {
                 .font(.system(size: AppDimens.fontTitle2, weight: .bold))
                 .foregroundColor(AppColors.textPrimary)
 
-            ForEach(pastAttendances) { attendance in
-                PastAttendanceRow(attendance: attendance)
+            if viewModel.pastAttendances.isEmpty && !viewModel.isLoading {
+                Text("Sem chamadas anteriores.")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
+            } else {
+                ForEach(viewModel.pastAttendances) { attendance in
+                    PastAttendanceRow(attendance: attendance)
+                }
             }
         }
     }
 }
 
-// MARK: - Past Attendance Row
-
 private struct PastAttendanceRow: View {
-    let attendance: PastAttendance
+    let attendance: ChamadaPassadaDTO
 
     var body: some View {
         HStack(spacing: AppDimens.spacingSM + 6) {
@@ -220,7 +226,7 @@ private struct PastAttendanceRow: View {
                 Text(attendance.className)
                     .font(.system(size: AppDimens.fontCallout, weight: .semibold))
                     .foregroundColor(AppColors.textPrimary)
-                Text("\(attendance.date) • \(attendance.time) • \(attendance.classType.rawValue)")
+                Text("\(attendance.date) • \(attendance.time)\(attendance.classType.map { " • \($0)" } ?? "")")
                     .font(.system(size: AppDimens.fontCaption, weight: .regular))
                     .foregroundColor(AppColors.textSecondary)
             }
@@ -244,5 +250,5 @@ private struct PastAttendanceRow: View {
 }
 
 #Preview {
-    ProfessorHomeView()
+    ProfessorHomeView().environmentObject(AuthSession.shared)
 }

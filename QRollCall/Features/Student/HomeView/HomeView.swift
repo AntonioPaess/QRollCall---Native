@@ -8,13 +8,9 @@
 import SwiftUI
 
 struct HomeView: View {
-    @State private var showAttendanceFlow = false
-    @State private var hasActiveAttendance = true
-
-    private let user = MockData.user
-    private let nextClass = MockData.nextClass
-    private let stats = MockData.stats
-    private let activities = MockData.recentActivities
+    @EnvironmentObject private var auth: AuthSession
+    @StateObject private var viewModel = StudentHomeViewModel()
+    @State private var selectedAttendance: ChamadaAtivaDTO?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -25,8 +21,10 @@ struct HomeView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(AppColors.background)
-        .fullScreenCover(isPresented: $showAttendanceFlow) {
-            AttendanceFlowView()
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
+        .fullScreenCover(item: $selectedAttendance) { attendance in
+            AttendanceFlowView(attendance: attendance)
         }
     }
 
@@ -45,7 +43,7 @@ struct HomeView: View {
                     Text(AppStrings.greeting)
                         .font(.system(size: AppDimens.fontCallout, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
-                    Text(user.fullName)
+                    Text(auth.fullName)
                         .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
                         .foregroundColor(.white)
                 }
@@ -56,7 +54,7 @@ struct HomeView: View {
                     Circle()
                         .fill(.white.opacity(0.25))
                         .frame(width: AppDimens.avatarSize, height: AppDimens.avatarSize)
-                    Text(user.initials)
+                    Text(auth.initials.isEmpty ? "?" : auth.initials)
                         .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
                         .foregroundColor(.white)
                 }
@@ -70,8 +68,13 @@ struct HomeView: View {
 
     private var mainContent: some View {
         VStack(spacing: AppDimens.spacingXL) {
-            if hasActiveAttendance {
-                activeAttendanceBanner
+            if let message = viewModel.errorMessage {
+                Text(message)
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.error)
+            }
+            if let active = viewModel.firstActiveAttendance {
+                activeAttendanceBanner(active)
             }
             nextClassCard
             statsGrid
@@ -83,9 +86,9 @@ struct HomeView: View {
 
     // MARK: - Active Attendance Banner
 
-    private var activeAttendanceBanner: some View {
+    private func activeAttendanceBanner(_ active: ChamadaAtivaDTO) -> some View {
         Button {
-            showAttendanceFlow = true
+            selectedAttendance = active
         } label: {
             HStack(spacing: AppDimens.spacingLG) {
                 ZStack {
@@ -98,7 +101,7 @@ struct HomeView: View {
                 }
 
                 VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                    Text(AppStrings.activeAttendance)
+                    Text(active.materiaNome.isEmpty ? AppStrings.activeAttendance : active.materiaNome)
                         .font(.system(size: AppDimens.fontCallout, weight: .bold))
                         .foregroundColor(AppColors.textPrimary)
                     Text(AppStrings.tapToRegister)
@@ -136,31 +139,37 @@ struct HomeView: View {
                     .foregroundColor(AppColors.textSecondary)
             }
 
-            Text(nextClass.name)
-                .font(.system(size: AppDimens.fontTitle1, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
+            if let next = viewModel.nextClass {
+                Text(next.nome)
+                    .font(.system(size: AppDimens.fontTitle1, weight: .bold))
+                    .foregroundColor(AppColors.textPrimary)
 
-            Text("\(nextClass.startTime) - \(nextClass.endTime) • \(nextClass.room)")
-                .font(.system(size: AppDimens.fontBody, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
-
-            HStack {
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(AppColors.primaryOpacity(0.15))
-                            .frame(height: AppDimens.progressBarHeight)
-                        Capsule()
-                            .fill(AppColors.primary)
-                            .frame(width: geometry.size.width * nextClass.progress, height: AppDimens.progressBarHeight)
-                    }
-                }
-                .frame(height: AppDimens.progressBarHeight)
-
-                Text(nextClass.timeUntil)
-                    .font(.system(size: AppDimens.fontCaption, weight: .medium))
+                Text("\(next.startTime) - \(next.endTime) • \(next.sala)")
+                    .font(.system(size: AppDimens.fontBody, weight: .regular))
                     .foregroundColor(AppColors.textSecondary)
-                    .fixedSize()
+
+                HStack {
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(AppColors.primaryOpacity(0.15))
+                                .frame(height: AppDimens.progressBarHeight)
+                            Capsule()
+                                .fill(AppColors.primary)
+                                .frame(width: geometry.size.width * next.progress, height: AppDimens.progressBarHeight)
+                        }
+                    }
+                    .frame(height: AppDimens.progressBarHeight)
+
+                    Text(next.timeUntil)
+                        .font(.system(size: AppDimens.fontCaption, weight: .medium))
+                        .foregroundColor(AppColors.textSecondary)
+                        .fixedSize()
+                }
+            } else {
+                Text("Sem aulas agendadas")
+                    .font(.system(size: AppDimens.fontBody, weight: .regular))
+                    .foregroundColor(AppColors.textSecondary)
             }
         }
         .padding(AppDimens.spacingXL)
@@ -172,20 +181,21 @@ struct HomeView: View {
     // MARK: - Stats Grid
 
     private var statsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: AppDimens.spacingMD), GridItem(.flexible(), spacing: AppDimens.spacingMD)], spacing: AppDimens.spacingMD) {
+        let s = viewModel.stats
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: AppDimens.spacingMD), GridItem(.flexible(), spacing: AppDimens.spacingMD)], spacing: AppDimens.spacingMD) {
             StatCard(
                 icon: AppIcons.chartUp,
                 iconColor: AppColors.success,
                 title: AppStrings.presence,
-                value: "\(stats.presencePercentage)%",
-                subtitle: stats.presenceChange,
+                value: "\(s?.presencePercentage ?? 0)%",
+                subtitle: s?.presenceChange ?? "—",
                 subtitleColor: AppColors.success
             )
             StatCard(
                 icon: AppIcons.checkCircle,
                 iconColor: AppColors.primary,
                 title: AppStrings.classes,
-                value: "\(stats.totalClasses)",
+                value: "\(s?.totalClasses ?? 0)",
                 subtitle: AppStrings.confirmed,
                 subtitleColor: AppColors.textSecondary
             )
@@ -193,7 +203,7 @@ struct HomeView: View {
                 icon: AppIcons.xCircle,
                 iconColor: AppColors.error,
                 title: AppStrings.absences,
-                value: "\(stats.absences)",
+                value: "\(s?.absences ?? 0)",
                 subtitle: AppStrings.thisSemester,
                 subtitleColor: AppColors.textSecondary
             )
@@ -201,7 +211,7 @@ struct HomeView: View {
                 icon: AppIcons.flame,
                 iconColor: AppColors.warning,
                 title: AppStrings.streak,
-                value: "\(stats.streakDays)",
+                value: "\(s?.streakDays ?? 0)",
                 subtitle: AppStrings.consecutiveDays,
                 subtitleColor: AppColors.textSecondary
             )
@@ -216,8 +226,14 @@ struct HomeView: View {
                 .font(.system(size: AppDimens.fontTitle2, weight: .bold))
                 .foregroundColor(AppColors.textPrimary)
 
-            ForEach(activities) { activity in
-                ActivityRow(activity: activity)
+            if viewModel.activities.isEmpty && !viewModel.isLoading {
+                Text("Sem atividades por aqui ainda.")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
+            } else {
+                ForEach(viewModel.activities) { activity in
+                    ActivityRow(activity: activity)
+                }
             }
         }
     }
@@ -263,13 +279,13 @@ struct StatCard: View {
 // MARK: - Activity Row
 
 struct ActivityRow: View {
-    let activity: RecentActivity
+    let activity: AtividadeDTO
 
     private var statusColor: Color {
-        switch activity.status {
-        case .presente: return AppColors.success
-        case .ausente: return AppColors.error
-        case .justificado: return AppColors.warning
+        switch activity.status.lowercased() {
+        case "presente": return AppColors.success
+        case "ausente": return AppColors.error
+        default: return AppColors.warning
         }
     }
 
@@ -279,7 +295,7 @@ struct ActivityRow: View {
                 Circle()
                     .fill(statusColor.opacity(0.12))
                     .frame(width: AppDimens.activityIconSize, height: AppDimens.activityIconSize)
-                Image(systemName: activity.status == .presente ? AppIcons.checkCircleFill : AppIcons.xCircleFill)
+                Image(systemName: activity.status.lowercased() == "presente" ? AppIcons.checkCircleFill : AppIcons.xCircleFill)
                     .font(.system(size: AppDimens.iconLG))
                     .foregroundColor(statusColor)
             }
@@ -295,7 +311,7 @@ struct ActivityRow: View {
 
             Spacer()
 
-            Text(activity.status.rawValue)
+            Text(activity.status)
                 .font(.system(size: AppDimens.fontCaption, weight: .semibold))
                 .foregroundColor(statusColor)
                 .padding(.horizontal, AppDimens.spacingMD)
@@ -311,5 +327,5 @@ struct ActivityRow: View {
 }
 
 #Preview {
-    HomeView()
+    HomeView().environmentObject(AuthSession.shared)
 }

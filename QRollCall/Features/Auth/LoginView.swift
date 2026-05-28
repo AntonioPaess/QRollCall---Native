@@ -8,13 +8,13 @@
 import SwiftUI
 
 struct LoginView: View {
-    @AppStorage("isLoggedIn") private var isLoggedIn = false
-    @AppStorage("userRole") private var userRole = UserRole.student.rawValue
+    @EnvironmentObject private var auth: AuthSession
 
     @State private var email = ""
     @State private var password = ""
     @State private var selectedRole: UserRole = .student
-    @State private var showError = false
+    @State private var isLoading = false
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +25,14 @@ struct LoginView: View {
             Spacer().frame(height: AppDimens.spacing4XL)
 
             formSection
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: AppDimens.fontCaption, weight: .medium))
+                    .foregroundColor(AppColors.error)
+                    .padding(.top, AppDimens.spacingMD)
+                    .multilineTextAlignment(.center)
+            }
 
             Spacer()
 
@@ -85,6 +93,7 @@ struct LoginView: View {
                     .font(.system(size: AppDimens.fontCallout))
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
+                    .autocorrectionDisabled()
             }
             .padding(AppDimens.spacingLG)
             .background(AppColors.cardBackground)
@@ -136,25 +145,60 @@ struct LoginView: View {
 
     private var loginButton: some View {
         Button {
-            if AuthMockData.login(email: email, password: password, role: selectedRole) {
-                userRole = selectedRole.rawValue
-                isLoggedIn = true
-            } else {
-                showError = true
-            }
+            Task { await performLogin() }
         } label: {
-            Text(AppStrings.loginButton)
-                .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: AppDimens.buttonHeight)
-                .background(AppColors.primary)
-                .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
+            ZStack {
+                Text(AppStrings.loginButton)
+                    .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
+                    .foregroundColor(.white)
+                    .opacity(isLoading ? 0 : 1)
+                if isLoading {
+                    ProgressView().tint(.white)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: AppDimens.buttonHeight)
+            .background(canSubmit ? AppColors.primary : AppColors.primaryOpacity(0.4))
+            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
         }
         .buttonStyle(.plain)
+        .disabled(!canSubmit || isLoading)
+    }
+
+    private var canSubmit: Bool {
+        !email.trimmingCharacters(in: .whitespaces).isEmpty
+        && !password.isEmpty
+    }
+
+    private func performLogin() async {
+        errorMessage = nil
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let response = try await AuthService.login(
+                email: email.trimmingCharacters(in: .whitespaces),
+                password: password,
+                role: selectedRole
+            )
+            auth.apply(response, requestedRole: selectedRole)
+        } catch let APIError.server(_, message) {
+            errorMessage = friendly(message) ?? "Email ou senha inválidos."
+        } catch APIError.unauthorized {
+            errorMessage = "Email ou senha inválidos."
+        } catch APIError.transport {
+            errorMessage = "Não foi possível conectar ao servidor."
+        } catch {
+            errorMessage = "Erro ao entrar. Tente novamente."
+        }
+    }
+
+    private func friendly(_ raw: String?) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        return raw.count > 200 ? String(raw.prefix(200)) : raw
     }
 }
 
 #Preview {
     LoginView()
+        .environmentObject(AuthSession.shared)
 }

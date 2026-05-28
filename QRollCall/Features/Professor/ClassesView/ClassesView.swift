@@ -8,17 +8,29 @@
 import SwiftUI
 
 struct ClassesView: View {
-    private let classes = ProfessorHomeMockData.classes
+    @StateObject private var viewModel = ClassesViewModel()
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: AppDimens.spacingMD) {
-                    ForEach(classes) { cls in
-                        NavigationLink(destination: ClassDetailView(professorClass: cls)) {
-                            classCard(cls)
+                    if let msg = viewModel.errorMessage {
+                        Text(msg)
+                            .font(.system(size: AppDimens.fontCaption))
+                            .foregroundColor(AppColors.error)
+                    }
+                    if viewModel.turmas.isEmpty && !viewModel.isLoading {
+                        Text("Você ainda não tem turmas.")
+                            .font(.system(size: AppDimens.fontCaption))
+                            .foregroundColor(AppColors.textSecondary)
+                            .padding(.top, AppDimens.spacingXL)
+                    } else {
+                        ForEach(viewModel.turmas) { cls in
+                            NavigationLink(destination: ClassDetailView(turma: cls)) {
+                                classCard(cls)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, AppDimens.spacingXXL)
@@ -27,17 +39,19 @@ struct ClassesView: View {
             .background(AppColors.background)
             .navigationTitle(AppStrings.classesTitle)
             .navigationBarTitleDisplayMode(.large)
+            .task { await viewModel.load() }
+            .refreshable { await viewModel.load() }
         }
     }
 
-    private func classCard(_ cls: ProfessorClass) -> some View {
+    private func classCard(_ cls: TurmaDTO) -> some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
             HStack {
                 VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                    Text(cls.name)
+                    Text(cls.nome)
                         .font(.system(size: AppDimens.fontTitle3, weight: .bold))
                         .foregroundColor(AppColors.textPrimary)
-                    Text("\(cls.code) • \(cls.schedule)")
+                    Text("\(cls.codigo) • \(cls.horarioSemanal)")
                         .font(.system(size: AppDimens.fontCaption, weight: .regular))
                         .foregroundColor(AppColors.textSecondary)
                 }

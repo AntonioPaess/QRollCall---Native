@@ -8,9 +8,9 @@
 import SwiftUI
 
 struct ProfessorProfileView: View {
-    @AppStorage("isLoggedIn") private var isLoggedIn = false
+    @EnvironmentObject private var auth: AuthSession
+    @StateObject private var viewModel = ProfessorProfileViewModel()
 
-    private let professor = ProfessorProfileMockData.professor
     private let settingsItems = ProfileMockData.settingsItems
 
     var body: some View {
@@ -22,9 +22,9 @@ struct ProfessorProfileView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(AppColors.background)
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
     }
-
-    // MARK: - Header
 
     private var headerSection: some View {
         ZStack(alignment: .bottom) {
@@ -52,8 +52,6 @@ struct ProfessorProfileView: View {
         .padding(.bottom, 120)
     }
 
-    // MARK: - Profile Card
-
     private var profileCard: some View {
         VStack(spacing: AppDimens.spacingXL) {
             HStack(spacing: AppDimens.spacingLG) {
@@ -61,16 +59,16 @@ struct ProfessorProfileView: View {
                     .fill(AppColors.primary)
                     .frame(width: 72, height: 72)
                     .overlay(
-                        Text(professor.initials)
+                        Text(viewModel.initials)
                             .font(.system(size: AppDimens.fontTitle1, weight: .bold))
                             .foregroundColor(.white)
                     )
 
                 VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                    Text(professor.fullName)
+                    Text(viewModel.fullName)
                         .font(.system(size: AppDimens.fontTitle2, weight: .bold))
                         .foregroundColor(AppColors.textPrimary)
-                    Text(professor.department)
+                    Text(viewModel.perfil?.department ?? "")
                         .font(.system(size: AppDimens.fontSmall, weight: .regular))
                         .foregroundColor(AppColors.textSecondary)
                 }
@@ -79,8 +77,8 @@ struct ProfessorProfileView: View {
             }
 
             VStack(spacing: AppDimens.spacingMD) {
-                infoRow(icon: AppIcons.envelope, text: professor.email)
-                infoRow(icon: AppIcons.phone, text: professor.phone)
+                infoRow(icon: AppIcons.envelope, text: viewModel.perfil?.email ?? "—")
+                infoRow(icon: AppIcons.phone, text: viewModel.perfil?.phone.isEmpty == false ? viewModel.perfil!.phone : "Sem telefone")
             }
         }
         .padding(AppDimens.spacingXL)
@@ -103,8 +101,6 @@ struct ProfessorProfileView: View {
         }
     }
 
-    // MARK: - Main Content
-
     private var mainContent: some View {
         VStack(spacing: AppDimens.spacingXL) {
             statsSection
@@ -116,10 +112,9 @@ struct ProfessorProfileView: View {
         .padding(.bottom, AppDimens.spacingXXL)
     }
 
-    // MARK: - Stats
-
     private var statsSection: some View {
-        VStack(alignment: .leading, spacing: AppDimens.spacingLG) {
+        let p = viewModel.perfil
+        return VStack(alignment: .leading, spacing: AppDimens.spacingLG) {
             HStack(spacing: AppDimens.spacingSM) {
                 Image(systemName: AppIcons.statsIcon)
                     .font(.system(size: AppDimens.iconMD))
@@ -133,9 +128,9 @@ struct ProfessorProfileView: View {
                 columns: [GridItem(.flexible(), spacing: AppDimens.spacingMD), GridItem(.flexible(), spacing: AppDimens.spacingMD)],
                 spacing: AppDimens.spacingMD
             ) {
-                statCell(value: "\(professor.averagePresence)%", label: AppStrings.averagePresence)
-                statCell(value: "\(professor.classesGiven)", label: AppStrings.classesGiven)
-                statCell(value: "\(professor.activeClasses)", label: AppStrings.tabClasses)
+                statCell(value: "\(p?.averagePresence ?? 0)%", label: AppStrings.averagePresence)
+                statCell(value: "\(p?.classesGiven ?? 0)", label: AppStrings.classesGiven)
+                statCell(value: "\(p?.activeClasses ?? 0)", label: AppStrings.tabClasses)
             }
         }
         .padding(AppDimens.spacingXL)
@@ -158,8 +153,6 @@ struct ProfessorProfileView: View {
         .background(AppColors.background)
         .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
     }
-
-    // MARK: - Settings
 
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -199,11 +192,9 @@ struct ProfessorProfileView: View {
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
     }
 
-    // MARK: - Logout
-
     private var logoutButton: some View {
         Button {
-            isLoggedIn = false
+            auth.logout()
         } label: {
             HStack(spacing: AppDimens.spacingSM) {
                 Image(systemName: AppIcons.logout)
@@ -232,4 +223,5 @@ struct ProfessorProfileView: View {
 
 #Preview {
     ProfessorProfileView()
+        .environmentObject(AuthSession.shared)
 }

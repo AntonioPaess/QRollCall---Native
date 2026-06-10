@@ -76,4 +76,23 @@ enum AppIcons {
     static let history = "clock.arrow.circlepath"
     static let profile = "person"
     static let classes = "person.3"
+    static let metrics = "chart.bar.fill"
+    static let abono = "checkmark.shield.fill"
+
+    // MARK: - Coordenação
+
+    static let trendUp = "arrow.up.right.circle.fill"
+    static let trendDown = "arrow.down.right.circle.fill"
+    static let warningTriangle = "exclamationmark.triangle.fill"
+    static let book = "book.fill"
+    static let calendar = "calendar"
+    static let person = "person.crop.circle"
+    static let personBadge = "person.crop.circle.badge.checkmark"
+    static let personMinus = "person.crop.circle.badge.minus"
+    static let personFill = "person.fill"
+    static let listBullet = "list.bullet"
+    static let listFilter = "line.3.horizontal.decrease.circle"
+    static let chartPie = "chart.pie.fill"
+    static let chevronCompact = "chevron.compact.right"
+    static let xmark = "xmark"
 }

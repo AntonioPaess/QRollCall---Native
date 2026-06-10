@@ -12,6 +12,7 @@ import Foundation
 enum UserRole: String {
     case student = "Aluno"
     case professor = "Professor"
+    case coordenacao = "Coordenacao"
 }
 
 // MARK: - Notifications

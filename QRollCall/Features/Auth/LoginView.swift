@@ -46,31 +46,23 @@ struct LoginView: View {
     // MARK: - Logo
 
     private var logoSection: some View {
-        VStack(spacing: AppDimens.spacingMD) {
-            ZStack {
-                RoundedRectangle(cornerRadius: AppDimens.radiusXL)
-                    .fill(
-                        LinearGradient(
-                            colors: AppColors.headerGradient,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 80, height: 80)
-                    .shadow(color: AppColors.primary.opacity(0.3), radius: 15, y: 8)
+        VStack(spacing: AppDimens.spacingLG) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(AppColors.primary.opacity(0.12))
+                .frame(width: 64, height: 64)
+                .overlay {
+                    Image(systemName: AppIcons.qrCode)
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
+                }
 
-                Image(systemName: AppIcons.qrCode)
-                    .font(.system(size: AppDimens.icon3XL - 10, weight: .medium))
-                    .foregroundColor(.white)
-            }
-
-            VStack(spacing: AppDimens.spacingXS) {
+            VStack(spacing: 6) {
                 Text(AppStrings.loginTitle)
-                    .font(.system(size: AppDimens.fontCallout, weight: .regular))
-                    .foregroundColor(AppColors.textSecondary)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
                 Text(AppStrings.appName)
-                    .font(.system(size: AppDimens.fontHero, weight: .bold))
-                    .foregroundColor(AppColors.textPrimary)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
     }
@@ -78,58 +70,45 @@ struct LoginView: View {
     // MARK: - Form
 
     private var formSection: some View {
-        VStack(spacing: AppDimens.spacingLG) {
-            HStack(spacing: AppDimens.spacingMD) {
-                Image(systemName: AppIcons.emailIcon)
-                    .font(.system(size: AppDimens.iconMD))
-                    .foregroundColor(AppColors.textTertiary)
-                    .frame(width: AppDimens.iconXL)
+        VStack(spacing: AppDimens.spacingMD) {
+            inputRow(icon: AppIcons.emailIcon) {
                 TextField(AppStrings.emailPlaceholder, text: $email)
-                    .font(.system(size: AppDimens.fontCallout))
+                    .font(.system(size: 16))
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
                     .autocorrectionDisabled()
             }
-            .padding(AppDimens.spacingLG)
-            .background(AppColors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
 
-            HStack(spacing: AppDimens.spacingMD) {
-                Image(systemName: AppIcons.lockIcon)
-                    .font(.system(size: AppDimens.iconMD))
-                    .foregroundColor(AppColors.textTertiary)
-                    .frame(width: AppDimens.iconXL)
+            inputRow(icon: AppIcons.lockIcon) {
                 SecureField(AppStrings.passwordPlaceholder, text: $password)
-                    .font(.system(size: AppDimens.fontCallout))
+                    .font(.system(size: 16))
             }
-            .padding(AppDimens.spacingLG)
-            .background(AppColors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
         }
+    }
+
+    private func inputRow<Content: View>(icon: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: AppDimens.spacingMD) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(AppColors.textTertiary)
+                .frame(width: 20)
+            content()
+        }
+        .padding(.horizontal, AppDimens.spacingLG)
+        .padding(.vertical, 14)
+        .glassCard(corner: 12)
     }
 
     // MARK: - Login Button
 
     private var loginButton: some View {
-        Button {
+        PrimaryActionButton(
+            title: AppStrings.loginButton,
+            isLoading: isLoading,
+            disabled: !canSubmit
+        ) {
             Task { await performLogin() }
-        } label: {
-            ZStack {
-                Text(AppStrings.loginButton)
-                    .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
-                    .foregroundColor(.white)
-                    .opacity(isLoading ? 0 : 1)
-                if isLoading {
-                    ProgressView().tint(.white)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: AppDimens.buttonHeight)
-            .background(canSubmit ? AppColors.primary : AppColors.primaryOpacity(0.4))
-            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
         }
-        .buttonStyle(.plain)
-        .disabled(!canSubmit || isLoading)
     }
 
     private var canSubmit: Bool {

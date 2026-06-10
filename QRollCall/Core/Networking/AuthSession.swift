@@ -39,6 +39,7 @@ final class AuthSession: ObservableObject {
 
         let resolved: UserRole = {
             let raw = response.role.lowercased()
+            if raw.contains("coord") || raw == "admin" { return .coordenacao }
             if raw.contains("prof") { return .professor }
             return .student
         }()

@@ -19,6 +19,8 @@ struct QRollCallApp: App {
                     OnboardingView()
                 } else if !auth.isAuthenticated {
                     LoginView()
+                } else if auth.role == .coordenacao {
+                    CoordenacaoTabView()
                 } else if auth.role == .professor {
                     ProfessorTabView()
                 } else {

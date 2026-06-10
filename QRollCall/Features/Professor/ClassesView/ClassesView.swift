@@ -33,10 +33,12 @@ struct ClassesView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, AppDimens.spacingXXL)
                 .padding(.vertical, AppDimens.spacingLG)
             }
-            .background(AppColors.background)
+            .scrollContentBackground(.hidden)
+            .background(AppColors.background.ignoresSafeArea())
             .navigationTitle(AppStrings.classesTitle)
             .navigationBarTitleDisplayMode(.large)
             .task { await viewModel.load() }

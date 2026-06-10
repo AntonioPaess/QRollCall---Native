@@ -2,8 +2,6 @@
 //  ProfileView.swift
 //  QRollCall
 //
-//  Created by Antônio Paes on 15/04/26.
-//
 
 import SwiftUI
 
@@ -14,253 +12,146 @@ struct ProfileView: View {
     private let settingsItems = ProfileMockData.settingsItems
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                headerSection
-                mainContent
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: AppDimens.spacingXL) {
+                    header
+                    statsSection
+                    settingsSection
+                    logoutButton
+                    versionFooter
+                }
+                .padding(.horizontal, AppDimens.spacingXXL)
+                .padding(.top, AppDimens.spacingLG)
+                .padding(.bottom, AppDimens.spacing4XL)
             }
+            .background(AppColors.background)
+            .navigationTitle(AppStrings.profileTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await viewModel.load() }
+            .refreshable { await viewModel.load() }
         }
-        .ignoresSafeArea(edges: .top)
-        .background(AppColors.background)
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
     }
 
     // MARK: - Header
 
-    private var headerSection: some View {
-        ZStack(alignment: .bottom) {
-            LinearGradient(
-                colors: AppColors.headerGradient,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 140)
-
-            VStack {
-                HStack {
-                    Text(AppStrings.profileTitle)
-                        .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
-                }
-                .padding(.horizontal, AppDimens.spacingXXL)
-                .padding(.bottom, AppDimens.spacingXXXL)
-            }
-
-            profileCard
-                .offset(y: 130)
-        }
-        .padding(.bottom, 140)
+    private var header: some View {
+        ProfileHeader(
+            initials: viewModel.initials,
+            fullName: viewModel.fullName,
+            roleLabel: "Aluno",
+            infoLines: profileInfoLines
+        )
     }
 
-    // MARK: - Profile Card
-
-    private var profileCard: some View {
-        VStack(spacing: AppDimens.spacingXL) {
-            HStack(spacing: AppDimens.spacingLG) {
-                ZStack(alignment: .bottomLeading) {
-                    Circle()
-                        .fill(AppColors.primary)
-                        .frame(width: 72, height: 72)
-                        .overlay(
-                            Text(viewModel.initials)
-                                .font(.system(size: AppDimens.fontTitle1, weight: .bold))
-                                .foregroundColor(.white)
-                        )
-                }
-
-                VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                    Text(viewModel.fullName)
-                        .font(.system(size: AppDimens.fontTitle2, weight: .bold))
-                        .foregroundColor(AppColors.textPrimary)
-                    Text("\(AppStrings.matricula) \(viewModel.perfil?.matricula ?? "—")")
-                        .font(.system(size: AppDimens.fontSmall, weight: .regular))
-                        .foregroundColor(AppColors.textSecondary)
-                }
-
-                Spacer()
-            }
-
-            VStack(spacing: AppDimens.spacingMD) {
-                ProfileInfoRow(icon: AppIcons.envelope, text: viewModel.perfil?.email ?? "—")
-                ProfileInfoRow(icon: AppIcons.phone, text: viewModel.perfil?.phone.isEmpty == false ? viewModel.perfil!.phone : "Sem telefone")
-                ProfileInfoRow(icon: AppIcons.graduationCap, text: viewModel.courseInfo)
-            }
+    private var profileInfoLines: [ProfileHeader.InfoLine] {
+        var lines: [ProfileHeader.InfoLine] = []
+        if let mat = viewModel.perfil?.matricula, !mat.isEmpty {
+            lines.append(.init(icon: AppIcons.graduationCap, text: "Matrícula \(mat)"))
         }
-        .padding(AppDimens.spacingXL)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
-        .padding(.horizontal, AppDimens.spacingXXL)
+        lines.append(.init(icon: AppIcons.envelope, text: viewModel.perfil?.email ?? "—"))
+        if let phone = viewModel.perfil?.phone, !phone.isEmpty {
+            lines.append(.init(icon: AppIcons.phone, text: phone))
+        }
+        if !viewModel.courseInfo.isEmpty {
+            lines.append(.init(icon: AppIcons.book, text: viewModel.courseInfo))
+        }
+        return lines
     }
 
-    // MARK: - Main Content
-
-    private var mainContent: some View {
-        VStack(spacing: AppDimens.spacingXL) {
-            statsSection
-            settingsSection
-            logoutButton
-            versionFooter
-        }
-        .padding(.horizontal, AppDimens.spacingXXL)
-        .padding(.bottom, AppDimens.spacingXXL)
-    }
-
-    // MARK: - Stats Section
+    // MARK: - Stats
 
     private var statsSection: some View {
         let s = viewModel.stats
-        return VStack(alignment: .leading, spacing: AppDimens.spacingLG) {
-            HStack(spacing: AppDimens.spacingSM) {
-                Image(systemName: AppIcons.statsIcon)
-                    .font(.system(size: AppDimens.iconMD))
-                    .foregroundColor(AppColors.primary)
-                Text(AppStrings.generalStats)
-                    .font(.system(size: AppDimens.fontTitle3, weight: .bold))
-                    .foregroundColor(AppColors.textPrimary)
-            }
-
+        return VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
+            SectionHeader(title: AppStrings.generalStats)
             LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: AppDimens.spacingMD),
-                    GridItem(.flexible(), spacing: AppDimens.spacingMD)
-                ],
+                columns: [GridItem(.flexible(), spacing: AppDimens.spacingMD),
+                          GridItem(.flexible(), spacing: AppDimens.spacingMD)],
                 spacing: AppDimens.spacingMD
             ) {
-                ProfileStatCell(value: "\(s?.presencePercentage ?? 0)%", label: AppStrings.presenceRate)
-                ProfileStatCell(value: "\(s?.totalClasses ?? 0)", label: AppStrings.confirmedClasses)
-                ProfileStatCell(value: "\(s?.absences ?? 0)", label: AppStrings.absences)
-                ProfileStatCell(value: "\(s?.streakDays ?? 0)", label: AppStrings.consecutiveDaysProfile)
+                KPICard(title: AppStrings.presenceRate,
+                        value: "\(s?.presencePercentage ?? 0)%",
+                        icon: AppIcons.chartUp,
+                        tint: AppColors.success)
+                KPICard(title: AppStrings.confirmedClasses,
+                        value: "\(s?.totalClasses ?? 0)",
+                        icon: AppIcons.checkCircle,
+                        tint: AppColors.primary)
+                KPICard(title: AppStrings.absences,
+                        value: "\(s?.absences ?? 0)",
+                        icon: AppIcons.xCircle,
+                        tint: AppColors.danger)
+                KPICard(title: AppStrings.consecutiveDaysProfile,
+                        value: "\(s?.streakDays ?? 0)",
+                        icon: AppIcons.flame,
+                        tint: AppColors.warning)
             }
         }
-        .padding(AppDimens.spacingXL)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
     }
 
-    // MARK: - Settings Section
+    // MARK: - Settings
 
     private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(AppStrings.settings)
-                .font(.system(size: AppDimens.fontTitle3, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
-                .padding(.horizontal, AppDimens.spacingXL)
-                .padding(.top, AppDimens.spacingXL)
-                .padding(.bottom, AppDimens.spacingLG)
-
+        VStack(spacing: 0) {
             ForEach(Array(settingsItems.enumerated()), id: \.element.id) { index, item in
                 if index > 0 {
-                    Divider()
-                        .padding(.horizontal, AppDimens.spacingXL)
+                    Divider().padding(.leading, AppDimens.spacingLG + 28 + AppDimens.spacingMD)
                 }
-
-                Button(action: {}) {
-                    HStack(spacing: AppDimens.spacingLG) {
-                        Image(systemName: item.icon)
-                            .font(.system(size: AppDimens.iconLG, weight: .regular))
-                            .foregroundColor(AppColors.textSecondary)
-                            .frame(width: AppDimens.iconXL)
-
-                        Text(item.title)
-                            .font(.system(size: AppDimens.fontCallout, weight: .medium))
-                            .foregroundColor(AppColors.textPrimary)
-
-                        Spacer()
-
-                        Image(systemName: AppIcons.chevronRight)
-                            .font(.system(size: AppDimens.iconSM, weight: .medium))
-                            .foregroundColor(AppColors.textTertiary)
-                    }
-                    .padding(.horizontal, AppDimens.spacingXL)
-                    .padding(.vertical, AppDimens.spacingLG)
-                }
-                .buttonStyle(.plain)
+                settingsRow(icon: item.icon, label: item.title)
             }
         }
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .minimalCard()
     }
 
-    // MARK: - Logout Button
-
-    private var logoutButton: some View {
-        Button {
-            auth.logout()
-        } label: {
-            HStack(spacing: AppDimens.spacingSM) {
-                Image(systemName: AppIcons.logout)
-                    .font(.system(size: AppDimens.iconMD, weight: .medium))
-                Text(AppStrings.logout)
-                    .font(.system(size: AppDimens.fontCallout, weight: .semibold))
+    private func settingsRow(icon: String, label: String) -> some View {
+        Button { } label: {
+            HStack(spacing: AppDimens.spacingMD) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundStyle(AppColors.primary)
+                    .frame(width: 28)
+                Text(label)
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppColors.textPrimary)
+                Spacer()
+                Image(systemName: AppIcons.chevronRight)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textTertiary)
             }
-            .foregroundColor(AppColors.error)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, AppDimens.spacingLG)
             .padding(.vertical, AppDimens.spacingLG)
-            .background(AppColors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Version Footer
+    // MARK: - Logout
+
+    private var logoutButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+            auth.logout()
+        } label: {
+            HStack {
+                Image(systemName: AppIcons.logout)
+                Text(AppStrings.logout)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppDimens.spacingLG)
+            .background(AppColors.danger.opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: AppDimens.radiusMD, style: .continuous))
+            .foregroundStyle(AppColors.danger)
+        }
+    }
 
     private var versionFooter: some View {
         Text(AppStrings.appVersion)
-            .font(.system(size: AppDimens.fontCaption, weight: .regular))
-            .foregroundColor(AppColors.textTertiary)
+            .font(.system(size: 12))
+            .foregroundStyle(AppColors.textTertiary)
             .frame(maxWidth: .infinity)
             .padding(.top, AppDimens.spacingSM)
-    }
-}
-
-// MARK: - Profile Info Row
-
-private struct ProfileInfoRow: View {
-    let icon: String
-    let text: String
-
-    var body: some View {
-        HStack(spacing: AppDimens.spacingMD) {
-            Image(systemName: icon)
-                .font(.system(size: AppDimens.iconMD, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
-                .frame(width: AppDimens.iconXL)
-
-            Text(text)
-                .font(.system(size: AppDimens.fontSmall, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
-
-            Spacer()
-        }
-    }
-}
-
-// MARK: - Profile Stat Cell
-
-private struct ProfileStatCell: View {
-    let value: String
-    let label: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppDimens.spacingSM) {
-            Text(value)
-                .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
-
-            Text(label)
-                .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppDimens.spacingLG)
-        .background(AppColors.background)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
     }
 }
 

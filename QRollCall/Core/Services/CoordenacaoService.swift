@@ -56,6 +56,15 @@ struct CoordenacaoService {
                                            authenticated: true)
     }
 
+    /// Busca universal: alunos, professores, matérias e cursos.
+    static func universalSearch(query: String) async throws -> UniversalSearchDTO {
+        try await APIClient.shared.request("/api/coordenacao/search",
+                                           method: .get,
+                                           query: ["q": query],
+                                           body: EmptyBody?.none,
+                                           authenticated: true)
+    }
+
     /// Lista alunos de um curso (todas turmas combinadas).
     static func alunosDoCurso(cursoId: Int64) async throws -> [AlunoBuscaDTO] {
         try await APIClient.shared.request("/api/coordenacao/curso/\(cursoId)/alunos",

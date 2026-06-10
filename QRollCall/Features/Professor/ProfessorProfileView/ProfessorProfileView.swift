@@ -2,8 +2,6 @@
 //  ProfessorProfileView.swift
 //  QRollCall
 //
-//  Created by Antônio Paes on 15/04/26.
-//
 
 import SwiftUI
 
@@ -14,208 +12,133 @@ struct ProfessorProfileView: View {
     private let settingsItems = ProfileMockData.settingsItems
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                headerSection
-                mainContent
-            }
-        }
-        .ignoresSafeArea(edges: .top)
-        .background(AppColors.background)
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
-    }
-
-    private var headerSection: some View {
-        ZStack(alignment: .bottom) {
-            LinearGradient(
-                colors: AppColors.headerGradient,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 140)
-
-            VStack {
-                HStack {
-                    Text(AppStrings.profileTitle)
-                        .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: AppDimens.spacingXL) {
+                    header
+                    statsSection
+                    settingsSection
+                    logoutButton
+                    versionFooter
                 }
                 .padding(.horizontal, AppDimens.spacingXXL)
-                .padding(.bottom, AppDimens.spacingXXXL)
+                .padding(.top, AppDimens.spacingLG)
+                .padding(.bottom, AppDimens.spacing4XL)
             }
-
-            profileCard
-                .offset(y: 110)
-        }
-        .padding(.bottom, 120)
-    }
-
-    private var profileCard: some View {
-        VStack(spacing: AppDimens.spacingXL) {
-            HStack(spacing: AppDimens.spacingLG) {
-                Circle()
-                    .fill(AppColors.primary)
-                    .frame(width: 72, height: 72)
-                    .overlay(
-                        Text(viewModel.initials)
-                            .font(.system(size: AppDimens.fontTitle1, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-
-                VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                    Text(viewModel.fullName)
-                        .font(.system(size: AppDimens.fontTitle2, weight: .bold))
-                        .foregroundColor(AppColors.textPrimary)
-                    Text(viewModel.perfil?.department ?? "")
-                        .font(.system(size: AppDimens.fontSmall, weight: .regular))
-                        .foregroundColor(AppColors.textSecondary)
-                }
-
-                Spacer()
-            }
-
-            VStack(spacing: AppDimens.spacingMD) {
-                infoRow(icon: AppIcons.envelope, text: viewModel.perfil?.email ?? "—")
-                infoRow(icon: AppIcons.phone, text: viewModel.perfil?.phone.isEmpty == false ? viewModel.perfil!.phone : "Sem telefone")
-            }
-        }
-        .padding(AppDimens.spacingXL)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
-        .padding(.horizontal, AppDimens.spacingXXL)
-    }
-
-    private func infoRow(icon: String, text: String) -> some View {
-        HStack(spacing: AppDimens.spacingMD) {
-            Image(systemName: icon)
-                .font(.system(size: AppDimens.iconMD, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
-                .frame(width: AppDimens.iconXL)
-            Text(text)
-                .font(.system(size: AppDimens.fontSmall, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
-            Spacer()
+            .background(AppColors.background)
+            .navigationTitle(AppStrings.profileTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await viewModel.load() }
+            .refreshable { await viewModel.load() }
         }
     }
 
-    private var mainContent: some View {
-        VStack(spacing: AppDimens.spacingXL) {
-            statsSection
-            settingsSection
-            logoutButton
-            versionFooter
+    private var header: some View {
+        ProfileHeader(
+            initials: viewModel.initials,
+            fullName: viewModel.fullName,
+            roleLabel: "Professor",
+            infoLines: profileInfoLines
+        )
+    }
+
+    private var profileInfoLines: [ProfileHeader.InfoLine] {
+        var lines: [ProfileHeader.InfoLine] = []
+        if let dep = viewModel.perfil?.department, !dep.isEmpty {
+            lines.append(.init(icon: AppIcons.book, text: dep))
         }
-        .padding(.horizontal, AppDimens.spacingXXL)
-        .padding(.bottom, AppDimens.spacingXXL)
+        lines.append(.init(icon: AppIcons.envelope, text: viewModel.perfil?.email ?? "—"))
+        if let phone = viewModel.perfil?.phone, !phone.isEmpty {
+            lines.append(.init(icon: AppIcons.phone, text: phone))
+        }
+        return lines
     }
 
     private var statsSection: some View {
         let p = viewModel.perfil
-        return VStack(alignment: .leading, spacing: AppDimens.spacingLG) {
-            HStack(spacing: AppDimens.spacingSM) {
-                Image(systemName: AppIcons.statsIcon)
-                    .font(.system(size: AppDimens.iconMD))
-                    .foregroundColor(AppColors.primary)
-                Text(AppStrings.generalStats)
-                    .font(.system(size: AppDimens.fontTitle3, weight: .bold))
-                    .foregroundColor(AppColors.textPrimary)
-            }
-
+        return VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
+            SectionHeader(title: AppStrings.generalStats)
             LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: AppDimens.spacingMD), GridItem(.flexible(), spacing: AppDimens.spacingMD)],
+                columns: [GridItem(.flexible(), spacing: AppDimens.spacingMD),
+                          GridItem(.flexible(), spacing: AppDimens.spacingMD)],
                 spacing: AppDimens.spacingMD
             ) {
-                statCell(value: "\(p?.averagePresence ?? 0)%", label: AppStrings.averagePresence)
-                statCell(value: "\(p?.classesGiven ?? 0)", label: AppStrings.classesGiven)
-                statCell(value: "\(p?.activeClasses ?? 0)", label: AppStrings.tabClasses)
+                KPICard(title: AppStrings.averagePresence,
+                        value: "\(p?.averagePresence ?? 0)%",
+                        icon: AppIcons.chartUp,
+                        tint: AppColors.success)
+                KPICard(title: AppStrings.classesGiven,
+                        value: "\(p?.classesGiven ?? 0)",
+                        icon: AppIcons.doc,
+                        tint: AppColors.primary)
+                KPICard(title: AppStrings.tabClasses,
+                        value: "\(p?.activeClasses ?? 0)",
+                        icon: AppIcons.classes,
+                        tint: AppColors.primaryStrong)
+                KPICard(title: "Alunos",
+                        value: "\(p?.totalStudents ?? 0)",
+                        icon: AppIcons.people,
+                        tint: AppColors.purple)
             }
         }
-        .padding(AppDimens.spacingXL)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-    }
-
-    private func statCell(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: AppDimens.spacingSM) {
-            Text(value)
-                .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
-            Text(label)
-                .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppDimens.spacingLG)
-        .background(AppColors.background)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
     }
 
     private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(AppStrings.settings)
-                .font(.system(size: AppDimens.fontTitle3, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
-                .padding(.horizontal, AppDimens.spacingXL)
-                .padding(.top, AppDimens.spacingXL)
-                .padding(.bottom, AppDimens.spacingLG)
-
+        VStack(spacing: 0) {
             ForEach(Array(settingsItems.enumerated()), id: \.element.id) { index, item in
                 if index > 0 {
-                    Divider().padding(.horizontal, AppDimens.spacingXL)
+                    Divider().padding(.leading, AppDimens.spacingLG + 28 + AppDimens.spacingMD)
                 }
-                Button(action: {}) {
-                    HStack(spacing: AppDimens.spacingLG) {
-                        Image(systemName: item.icon)
-                            .font(.system(size: AppDimens.iconLG, weight: .regular))
-                            .foregroundColor(AppColors.textSecondary)
-                            .frame(width: AppDimens.iconXL)
-                        Text(item.title)
-                            .font(.system(size: AppDimens.fontCallout, weight: .medium))
-                            .foregroundColor(AppColors.textPrimary)
-                        Spacer()
-                        Image(systemName: AppIcons.chevronRight)
-                            .font(.system(size: AppDimens.iconSM, weight: .medium))
-                            .foregroundColor(AppColors.textTertiary)
-                    }
-                    .padding(.horizontal, AppDimens.spacingXL)
-                    .padding(.vertical, AppDimens.spacingLG)
-                }
-                .buttonStyle(.plain)
+                settingsRow(icon: item.icon, label: item.title)
             }
         }
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .minimalCard()
     }
 
-    private var logoutButton: some View {
-        Button {
-            auth.logout()
-        } label: {
-            HStack(spacing: AppDimens.spacingSM) {
-                Image(systemName: AppIcons.logout)
-                    .font(.system(size: AppDimens.iconMD, weight: .medium))
-                Text(AppStrings.logout)
-                    .font(.system(size: AppDimens.fontCallout, weight: .semibold))
+    private func settingsRow(icon: String, label: String) -> some View {
+        Button { } label: {
+            HStack(spacing: AppDimens.spacingMD) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundStyle(AppColors.primary)
+                    .frame(width: 28)
+                Text(label)
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppColors.textPrimary)
+                Spacer()
+                Image(systemName: AppIcons.chevronRight)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textTertiary)
             }
-            .foregroundColor(AppColors.error)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, AppDimens.spacingLG)
             .padding(.vertical, AppDimens.spacingLG)
-            .background(AppColors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
+    private var logoutButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+            auth.logout()
+        } label: {
+            HStack {
+                Image(systemName: AppIcons.logout)
+                Text(AppStrings.logout)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppDimens.spacingLG)
+            .background(AppColors.danger.opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: AppDimens.radiusMD, style: .continuous))
+            .foregroundStyle(AppColors.danger)
+        }
+    }
+
     private var versionFooter: some View {
         Text(AppStrings.appVersion)
-            .font(.system(size: AppDimens.fontCaption, weight: .regular))
-            .foregroundColor(AppColors.textTertiary)
+            .font(.system(size: 12))
+            .foregroundStyle(AppColors.textTertiary)
             .frame(maxWidth: .infinity)
             .padding(.top, AppDimens.spacingSM)
     }

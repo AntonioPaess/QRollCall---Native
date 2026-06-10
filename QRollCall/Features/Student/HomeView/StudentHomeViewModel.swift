@@ -31,6 +31,20 @@ final class StudentHomeViewModel: ObservableObject {
         }
     }
 
+    /// Polling leve: só consulta chamadas ativas. Usado num loop curto para
+    /// detectar instantaneamente quando o professor inicia a chamada (sem
+    /// precisar de WebSocket). Silencioso — não muda isLoading nem errorMessage.
+    func pollActiveAttendances() async {
+        do {
+            let ativas = try await AlunoService.chamadasAtivas()
+            if ativas.map(\.id) != activeAttendances.map(\.id) {
+                activeAttendances = ativas
+            }
+        } catch {
+            // ignora silenciosamente — não polui a UI
+        }
+    }
+
     var hasActiveAttendance: Bool { !activeAttendances.isEmpty }
     var firstActiveAttendance: ChamadaAtivaDTO? { activeAttendances.first }
 }

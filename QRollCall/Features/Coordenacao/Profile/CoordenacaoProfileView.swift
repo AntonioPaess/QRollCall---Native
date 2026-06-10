@@ -27,28 +27,14 @@ struct CoordenacaoProfileView: View {
     }
 
     private var header: some View {
-        VStack(spacing: AppDimens.spacingMD) {
-            Avatar(initials: auth.initials, size: 80)
-
-            Text(auth.fullName)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-            Text(auth.email)
-                .font(.system(size: 14))
-                .foregroundStyle(AppColors.textSecondary)
-            Text(AppStrings.coordHomeGreeting.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppColors.primaryStrong)
-                .tracking(0.5)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(AppColors.surfaceMuted, in: Capsule())
-                .overlay {
-                    Capsule().strokeBorder(AppColors.hairline, lineWidth: 0.5)
-                }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, AppDimens.spacingLG)
+        ProfileHeader(
+            initials: auth.initials,
+            fullName: auth.fullName,
+            roleLabel: "Coordenação",
+            infoLines: [
+                .init(icon: AppIcons.envelope, text: auth.email)
+            ]
+        )
     }
 
     private var settingsList: some View {

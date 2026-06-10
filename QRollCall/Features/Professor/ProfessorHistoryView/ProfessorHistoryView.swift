@@ -2,8 +2,6 @@
 //  ProfessorHistoryView.swift
 //  QRollCall
 //
-//  Created by Antônio Paes on 15/04/26.
-//
 
 import SwiftUI
 
@@ -13,17 +11,18 @@ struct ProfessorHistoryView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AppDimens.spacingXL) {
+                VStack(alignment: .leading, spacing: AppDimens.spacingLG) {
                     Text(AppStrings.professorHistorySubtitle)
-                        .font(.system(size: AppDimens.fontBody, weight: .regular))
-                        .foregroundColor(AppColors.textSecondary)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppColors.textSecondary)
 
                     filterMenu
                     summaryCard
                     attendancesList
                 }
                 .padding(.horizontal, AppDimens.spacingXXL)
-                .padding(.vertical, AppDimens.spacingLG)
+                .padding(.top, AppDimens.spacingLG)
+                .padding(.bottom, AppDimens.spacing4XL)
             }
             .background(AppColors.background)
             .navigationTitle(AppStrings.historyTitle)
@@ -48,117 +47,106 @@ struct ProfessorHistoryView: View {
                 }
             }
         } label: {
-            HStack {
+            HStack(spacing: AppDimens.spacingMD) {
                 Image(systemName: AppIcons.filter)
-                    .font(.system(size: AppDimens.iconMD, weight: .medium))
-                    .foregroundColor(AppColors.textPrimary)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
                 Text(viewModel.selectedFilter)
-                    .font(.system(size: AppDimens.fontCallout, weight: .medium))
-                    .foregroundColor(AppColors.textPrimary)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 Image(systemName: AppIcons.chevronDown)
-                    .font(.system(size: AppDimens.iconSM, weight: .medium))
-                    .foregroundColor(AppColors.textSecondary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textTertiary)
             }
-            .padding(.horizontal, AppDimens.spacingXL)
-            .padding(.vertical, AppDimens.spacingLG)
-            .background(AppColors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+            .padding(.horizontal, AppDimens.spacingLG)
+            .padding(.vertical, 14)
+            .minimalCard()
         }
     }
 
     private var summaryCard: some View {
         HStack(spacing: 0) {
-            VStack(spacing: AppDimens.spacingXS) {
-                Text("\(viewModel.filtered.count)")
-                    .font(.system(size: AppDimens.fontTitle1, weight: .bold))
-                    .foregroundColor(.white)
-                Text(AppStrings.classesGiven)
-                    .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                    .foregroundColor(.white.opacity(0.8))
-            }
-            .frame(maxWidth: .infinity)
-
-            Rectangle().fill(.white.opacity(0.25)).frame(width: 1, height: 40)
-
-            VStack(spacing: AppDimens.spacingXS) {
-                Text("\(viewModel.averageRate)%")
-                    .font(.system(size: AppDimens.fontTitle1, weight: .bold))
-                    .foregroundColor(.white)
-                Text(AppStrings.averagePresence)
-                    .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                    .foregroundColor(.white.opacity(0.8))
-            }
-            .frame(maxWidth: .infinity)
+            summaryColumn(value: "\(viewModel.filtered.count)", label: AppStrings.classesGiven)
+            Rectangle().fill(AppColors.hairline).frame(width: 1, height: 32)
+            summaryColumn(value: "\(viewModel.averageRate)%",
+                          label: AppStrings.averagePresence,
+                          accent: AppColors.primaryStrong)
         }
-        .padding(.vertical, AppDimens.spacingXL)
-        .background(
-            LinearGradient(
-                colors: [AppColors.primary, AppColors.purple],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-        .shadow(color: AppColors.primary.opacity(0.3), radius: 10, y: 4)
+        .padding(.vertical, AppDimens.spacingLG)
+        .frame(maxWidth: .infinity)
+        .minimalCard()
+    }
+
+    private func summaryColumn(value: String, label: String, accent: Color = AppColors.textPrimary) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(accent)
+                .contentTransition(.numericText())
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var attendancesList: some View {
         VStack(spacing: AppDimens.spacingMD) {
             if viewModel.filtered.isEmpty && !viewModel.isLoading {
-                Text("Sem chamadas registradas.")
-                    .font(.system(size: AppDimens.fontCaption))
-                    .foregroundColor(AppColors.textSecondary)
-            }
-            ForEach(viewModel.filtered) { attendance in
-                NavigationLink(destination: AttendanceDetailView(attendance: attendance)) {
-                    row(attendance)
+                EmptyState(
+                    icon: AppIcons.doc,
+                    title: "Sem chamadas registradas",
+                    subtitle: "As chamadas que você fizer aparecem aqui."
+                )
+            } else {
+                ForEach(viewModel.filtered) { attendance in
+                    NavigationLink(destination: AttendanceDetailView(attendance: attendance)) {
+                        row(attendance)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 
     private func row(_ attendance: ChamadaPassadaDTO) -> some View {
-        HStack(spacing: AppDimens.spacingSM + 6) {
-            ZStack {
-                Circle()
-                    .fill(AppColors.primaryOpacity(0.12))
-                    .frame(width: AppDimens.activityIconSize, height: AppDimens.activityIconSize)
-                Image(systemName: AppIcons.doc)
-                    .font(.system(size: AppDimens.iconLG))
-                    .foregroundColor(AppColors.primary)
-            }
+        HStack(spacing: AppDimens.spacingMD) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppColors.surfaceMuted)
+                .frame(width: 40, height: 40)
+                .overlay {
+                    Image(systemName: AppIcons.doc)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.primaryStrong)
+                }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(attendance.className)
-                    .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                    .foregroundColor(AppColors.textPrimary)
-                Text("\(attendance.date) • \(attendance.time)\(attendance.classType.map { " • \($0)" } ?? "")")
-                    .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                    .foregroundColor(AppColors.textSecondary)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text("\(attendance.date) · \(attendance.time)\(attendance.classType.map { " · \($0)" } ?? "")")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppColors.textSecondary)
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(attendance.presentCount)/\(attendance.totalCount)")
-                    .font(.system(size: AppDimens.fontSmall, weight: .bold))
-                    .foregroundColor(AppColors.textPrimary)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary)
                 Text("\(attendance.presencePercentage)%")
-                    .font(.system(size: AppDimens.fontCaption, weight: .medium))
-                    .foregroundColor(AppColors.success)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppColors.success)
             }
 
             Image(systemName: AppIcons.chevronRight)
-                .font(.system(size: AppDimens.iconSM))
-                .foregroundColor(AppColors.textTertiary)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppColors.textTertiary)
         }
         .padding(AppDimens.spacingLG)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .minimalCard()
     }
 }
 

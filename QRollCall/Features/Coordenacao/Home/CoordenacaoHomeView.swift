@@ -20,10 +20,7 @@ struct CoordenacaoHomeView: View {
                 VStack(alignment: .leading, spacing: AppDimens.spacingXXL) {
                     PremiumHeader(
                         greeting: AppStrings.coordHomeGreeting,
-                        title: auth.firstName.isEmpty ? AppStrings.coordHomeSubtitle : auth.firstName,
-                        trailing: {
-                            Avatar(initials: auth.initials, size: AppDimens.avatarSize)
-                        }
+                        title: auth.firstName.isEmpty ? AppStrings.coordHomeSubtitle : auth.firstName
                     )
 
                     kpiGrid
@@ -44,7 +41,10 @@ struct CoordenacaoHomeView: View {
                     } else {
                         VStack(spacing: AppDimens.spacingMD) {
                             ForEach(vm.grupos) { grupo in
-                                GrupoSummaryCard(grupo: grupo)
+                                NavigationLink(value: grupo) {
+                                    GrupoSummaryCard(grupo: grupo)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -55,6 +55,9 @@ struct CoordenacaoHomeView: View {
             }
             .background(AppColors.background)
             .navigationBarHidden(true)
+            .navigationDestination(for: GrupoDTO.self) { grupo in
+                GrupoDetailView(grupo: grupo)
+            }
             .refreshable { await vm.load() }
             .task { await vm.load() }
         }

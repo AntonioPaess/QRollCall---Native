@@ -221,6 +221,22 @@ struct RegisterAlunoFormDTO: Encodable {
     let cursoId: Int64?
 }
 
+// MARK: - Busca universal
+
+struct UniversalSearchDTO: Decodable {
+    let alunos: [AlunoBuscaDTO]
+    let professores: [ProfessorListDTO]
+    let materias: [MateriaListDTO]
+    let cursos: [CursoResponseDTO]
+
+    var isEmpty: Bool {
+        alunos.isEmpty && professores.isEmpty && materias.isEmpty && cursos.isEmpty
+    }
+    var totalCount: Int {
+        alunos.count + professores.count + materias.count + cursos.count
+    }
+}
+
 // MARK: - Professor register (pela coordenação)
 
 struct RegisterProfessorFormDTO: Encodable {

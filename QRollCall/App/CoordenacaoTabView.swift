@@ -32,7 +32,7 @@ struct CoordenacaoTabView: View {
             }
             Tab(value: CoordTab.search, role: .search) {
                 NavigationStack {
-                    AlunoSearchContent()
+                    UniversalSearchContent()
                 }
             }
         }

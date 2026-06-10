@@ -9,6 +9,7 @@ struct PerfilProfessorDTO: Decodable {
     let classesGiven: Int
     let averagePresence: Int
     let activeClasses: Int
+    let totalStudents: Int?
 }
 
 struct ProximaAulaProfessorDTO: Decodable {

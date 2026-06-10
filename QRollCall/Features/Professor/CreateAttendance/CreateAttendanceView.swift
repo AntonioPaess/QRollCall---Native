@@ -9,25 +9,22 @@ import SwiftUI
 
 struct CreateAttendanceView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedClass: ProfessorClass?
-    @State private var selectedClassType: ClassType = .first
-    @State private var keywords = ""
-    @State private var durationMinutes: Int = 5
-    @State private var showLiveAttendance = false
-    @State private var isScheduled = false
-    @State private var scheduledDate = Date().addingTimeInterval(3600)
-
-    private let classes = ProfessorHomeMockData.classes
+    @StateObject private var viewModel = CreateAttendanceViewModel()
+    @State private var liveChamada: ChamadaCreatedDTO?
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: AppDimens.spacingXL) {
+                    if let msg = viewModel.errorMessage {
+                        Text(msg)
+                            .font(.system(size: AppDimens.fontCaption))
+                            .foregroundColor(AppColors.error)
+                    }
                     classPickerSection
                     classTypeSection
                     gamificationSection
                     durationSection
-                    scheduleSection
                     startButton
                 }
                 .padding(.horizontal, AppDimens.spacingXXL)
@@ -36,6 +33,7 @@ struct CreateAttendanceView: View {
             .background(AppColors.background)
             .navigationTitle(AppStrings.createAttendanceTitle)
             .navigationBarTitleDisplayMode(.large)
+            .task { await viewModel.loadTurmas() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -47,18 +45,17 @@ struct CreateAttendanceView: View {
                     }
                 }
             }
-            .fullScreenCover(isPresented: $showLiveAttendance) {
+            .fullScreenCover(item: $liveChamada) { chamada in
                 LiveAttendanceView(
-                    className: selectedClass?.name ?? "",
-                    classType: selectedClassType,
-                    totalStudents: selectedClass?.totalStudents ?? 0,
-                    durationMinutes: durationMinutes
+                    chamada: chamada,
+                    turmaNome: viewModel.selectedTurma?.nome ?? "",
+                    classType: viewModel.classType,
+                    totalStudents: viewModel.selectedTurma?.totalStudents ?? 0,
+                    durationMinutes: viewModel.durationMinutes
                 )
             }
         }
     }
-
-    // MARK: - Class Picker
 
     private var classPickerSection: some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
@@ -66,45 +63,46 @@ struct CreateAttendanceView: View {
                 .font(.system(size: AppDimens.fontCallout, weight: .semibold))
                 .foregroundColor(AppColors.textPrimary)
 
-            ForEach(classes) { cls in
+            if viewModel.turmas.isEmpty && !viewModel.isLoading {
+                Text("Sem turmas cadastradas.")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
+            }
+
+            ForEach(viewModel.turmas) { cls in
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedClass = cls
-                        if let words = ProfessorHomeMockData.gamificationWordSets[cls.name] {
-                            keywords = words.prefix(4).joined(separator: ", ")
-                        }
+                        viewModel.selectTurma(cls)
                     }
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                            Text(cls.name)
+                            Text(cls.nome)
                                 .font(.system(size: AppDimens.fontCallout, weight: .semibold))
                                 .foregroundColor(AppColors.textPrimary)
-                            Text("\(cls.schedule) • \(cls.room)")
+                            Text("\(cls.horarioSemanal) • \(cls.sala)")
                                 .font(.system(size: AppDimens.fontCaption, weight: .regular))
                                 .foregroundColor(AppColors.textSecondary)
                         }
                         Spacer()
-                        if selectedClass?.id == cls.id {
+                        if viewModel.selectedTurma?.id == cls.id {
                             Image(systemName: AppIcons.checkCircleFill)
                                 .font(.system(size: AppDimens.iconLG))
                                 .foregroundColor(AppColors.primary)
                         }
                     }
                     .padding(AppDimens.spacingLG)
-                    .background(selectedClass?.id == cls.id ? AppColors.primaryOpacity(0.08) : AppColors.cardBackground)
+                    .background(viewModel.selectedTurma?.id == cls.id ? AppColors.primaryOpacity(0.08) : AppColors.cardBackground)
                     .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
                     .overlay(
                         RoundedRectangle(cornerRadius: AppDimens.radiusMD)
-                            .stroke(selectedClass?.id == cls.id ? AppColors.primary : Color.clear, lineWidth: 1.5)
+                            .stroke(viewModel.selectedTurma?.id == cls.id ? AppColors.primary : Color.clear, lineWidth: 1.5)
                     )
                 }
                 .buttonStyle(.plain)
             }
         }
     }
-
-    // MARK: - Class Type
 
     private var classTypeSection: some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
@@ -120,9 +118,9 @@ struct CreateAttendanceView: View {
             .background(AppColors.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
 
-            Text(selectedClassType == .conjugated ? AppStrings.twoAbsences : AppStrings.oneAbsence)
+            Text(viewModel.classType == .conjugated ? AppStrings.twoAbsences : AppStrings.oneAbsence)
                 .font(.system(size: AppDimens.fontCaption, weight: .medium))
-                .foregroundColor(selectedClassType == .conjugated ? AppColors.warning : AppColors.textSecondary)
+                .foregroundColor(viewModel.classType == .conjugated ? AppColors.warning : AppColors.textSecondary)
                 .padding(.horizontal, AppDimens.spacingXS)
         }
     }
@@ -130,21 +128,19 @@ struct CreateAttendanceView: View {
     private func classTypeButton(_ type: ClassType, label: String) -> some View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
-                selectedClassType = type
+                viewModel.classType = type
             }
         } label: {
             Text(label)
-                .font(.system(size: AppDimens.fontCaption, weight: selectedClassType == type ? .semibold : .regular))
-                .foregroundColor(selectedClassType == type ? .white : AppColors.textSecondary)
+                .font(.system(size: AppDimens.fontCaption, weight: viewModel.classType == type ? .semibold : .regular))
+                .foregroundColor(viewModel.classType == type ? .white : AppColors.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppDimens.spacingMD)
-                .background(selectedClassType == type ? AppColors.primary : Color.clear)
+                .background(viewModel.classType == type ? AppColors.primary : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
         }
         .buttonStyle(.plain)
     }
-
-    // MARK: - Gamification
 
     private var gamificationSection: some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
@@ -152,7 +148,7 @@ struct CreateAttendanceView: View {
                 .font(.system(size: AppDimens.fontCallout, weight: .semibold))
                 .foregroundColor(AppColors.textPrimary)
 
-            TextField(AppStrings.gamificationPlaceholder, text: $keywords, axis: .vertical)
+            TextField(AppStrings.gamificationPlaceholder, text: $viewModel.keywordsRaw, axis: .vertical)
                 .font(.system(size: AppDimens.fontBody))
                 .lineLimit(2...4)
                 .padding(AppDimens.spacingLG)
@@ -160,8 +156,6 @@ struct CreateAttendanceView: View {
                 .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
         }
     }
-
-    // MARK: - Duration
 
     private let durationOptions = [3, 5, 10]
 
@@ -175,15 +169,15 @@ struct CreateAttendanceView: View {
                 ForEach(durationOptions, id: \.self) { minutes in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            durationMinutes = minutes
+                            viewModel.durationMinutes = minutes
                         }
                     } label: {
                         Text("\(minutes) min")
-                            .font(.system(size: AppDimens.fontSmall, weight: durationMinutes == minutes ? .semibold : .regular))
-                            .foregroundColor(durationMinutes == minutes ? .white : AppColors.textSecondary)
+                            .font(.system(size: AppDimens.fontSmall, weight: viewModel.durationMinutes == minutes ? .semibold : .regular))
+                            .foregroundColor(viewModel.durationMinutes == minutes ? .white : AppColors.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, AppDimens.spacingMD)
-                            .background(durationMinutes == minutes ? AppColors.primary : Color.clear)
+                            .background(viewModel.durationMinutes == minutes ? AppColors.primary : Color.clear)
                             .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
                     }
                     .buttonStyle(.plain)
@@ -194,59 +188,38 @@ struct CreateAttendanceView: View {
         }
     }
 
-    // MARK: - Schedule
-
-    private var scheduleSection: some View {
-        VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
-            Toggle(isOn: $isScheduled.animation(.easeInOut(duration: 0.2))) {
-                Text("Agendar chamada")
-                    .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                    .foregroundColor(AppColors.textPrimary)
-            }
-            .tint(AppColors.primary)
-
-            if isScheduled {
-                DatePicker(
-                    "Data e hora",
-                    selection: $scheduledDate,
-                    in: Date()...,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .datePickerStyle(.compact)
-                .font(.system(size: AppDimens.fontSmall))
-            }
-        }
-        .padding(AppDimens.spacingXL)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-    }
-
-    // MARK: - Start Button
-
     private var startButton: some View {
         Button {
-            if isScheduled {
-                dismiss()
-            } else {
-                showLiveAttendance = true
+            Task {
+                if let chamada = await viewModel.startAttendance() {
+                    liveChamada = chamada
+                }
             }
         } label: {
             HStack(spacing: AppDimens.spacingSM) {
-                Image(systemName: isScheduled ? AppIcons.clock : AppIcons.play)
-                    .font(.system(size: AppDimens.iconMD))
-                Text(isScheduled ? "Agendar Chamada" : AppStrings.startButton2)
-                    .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
+                if viewModel.isStarting {
+                    ProgressView().tint(.white)
+                } else {
+                    Image(systemName: AppIcons.play)
+                        .font(.system(size: AppDimens.iconMD))
+                    Text(AppStrings.startButton2)
+                        .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
+                }
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .frame(height: AppDimens.buttonHeight)
-            .background(selectedClass != nil ? AppColors.primary : AppColors.primaryOpacity(0.4))
+            .background(viewModel.selectedTurma != nil ? AppColors.primary : AppColors.primaryOpacity(0.4))
             .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
         }
         .buttonStyle(.plain)
-        .disabled(selectedClass == nil)
+        .disabled(viewModel.selectedTurma == nil || viewModel.isStarting)
         .padding(.top, AppDimens.spacingSM)
     }
+}
+
+extension ChamadaCreatedDTO: Identifiable {
+    var id: Int64 { idChamada }
 }
 
 #Preview {

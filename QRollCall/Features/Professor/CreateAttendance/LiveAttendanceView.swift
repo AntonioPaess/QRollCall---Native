@@ -9,39 +9,44 @@ import SwiftUI
 
 struct LiveAttendanceView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmedIDs: Set<UUID> = []
-    @State private var timeRemaining: Int
-    @State private var showSummary = false
-    @State private var timer: Timer?
+    @StateObject private var viewModel: LiveAttendanceViewModel
 
-    let className: String
+    let chamada: ChamadaCreatedDTO
+    let turmaNome: String
     let classType: ClassType
     let totalStudents: Int
     let durationMinutes: Int
 
-    private let allStudents = ProfessorHomeMockData.studentsForClass
+    @State private var showSummary = false
 
-    init(className: String, classType: ClassType, totalStudents: Int, durationMinutes: Int) {
-        self.className = className
+    init(chamada: ChamadaCreatedDTO,
+         turmaNome: String,
+         classType: ClassType,
+         totalStudents: Int,
+         durationMinutes: Int) {
+        self.chamada = chamada
+        self.turmaNome = turmaNome
         self.classType = classType
         self.totalStudents = totalStudents
         self.durationMinutes = durationMinutes
-        self._timeRemaining = State(initialValue: durationMinutes * 60)
-    }
-
-    private var confirmedStudents: [StudentAttendanceRecord] {
-        allStudents.filter { confirmedIDs.contains($0.id) }
-    }
-
-    private var absentStudents: [StudentAttendanceRecord] {
-        allStudents.filter { !confirmedIDs.contains($0.id) }
+        _viewModel = StateObject(wrappedValue: LiveAttendanceViewModel(
+            idChamada: chamada.idChamada,
+            totalStudents: totalStudents,
+            durationMinutes: durationMinutes
+        ))
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 statusHeader
-                studentsList
+                if let msg = viewModel.errorMessage {
+                    Text(msg)
+                        .font(.system(size: AppDimens.fontCaption))
+                        .foregroundColor(AppColors.error)
+                        .padding(.horizontal, AppDimens.spacingXXL)
+                }
+                confirmedList
                 closeButton
             }
             .background(AppColors.background)
@@ -50,7 +55,7 @@ struct LiveAttendanceView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        stopTimer()
+                        viewModel.stop()
                         dismiss()
                     } label: {
                         Image(systemName: AppIcons.arrowBack)
@@ -58,25 +63,23 @@ struct LiveAttendanceView: View {
                     }
                 }
             }
-            .onAppear { startSimulation() }
-            .onDisappear { stopTimer() }
+            .onAppear { viewModel.start() }
+            .onDisappear { viewModel.stop() }
             .fullScreenCover(isPresented: $showSummary) {
                 AttendanceSummaryView(
-                    className: className,
+                    chamada: chamada,
+                    className: turmaNome,
                     classType: classType,
-                    presentStudents: confirmedStudents,
-                    absentStudents: absentStudents,
-                    totalStudents: totalStudents
+                    presentStudents: viewModel.confirmados,
+                    totalStudents: viewModel.totalStudents
                 )
             }
         }
     }
 
-    // MARK: - Status Header
-
     private var statusHeader: some View {
         VStack(spacing: AppDimens.spacingLG) {
-            Text(className)
+            Text(turmaNome)
                 .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
                 .foregroundColor(AppColors.textPrimary)
 
@@ -88,23 +91,32 @@ struct LiveAttendanceView: View {
                 .background(AppColors.primaryOpacity(0.1))
                 .clipShape(Capsule())
 
+            HStack(spacing: AppDimens.spacingMD) {
+                Text("Código:")
+                    .font(.system(size: AppDimens.fontSmall, weight: .regular))
+                    .foregroundColor(AppColors.textSecondary)
+                Text(chamada.codigo)
+                    .font(.system(size: AppDimens.fontTitle2, weight: .bold))
+                    .foregroundColor(AppColors.primary)
+            }
+
             ZStack {
                 Circle()
                     .stroke(AppColors.primaryOpacity(0.15), lineWidth: 8)
                     .frame(width: 120, height: 120)
 
                 Circle()
-                    .trim(from: 0, to: CGFloat(confirmedIDs.count) / CGFloat(max(allStudents.count, 1)))
+                    .trim(from: 0, to: CGFloat(viewModel.confirmedCount) / CGFloat(max(viewModel.totalStudents, 1)))
                     .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .frame(width: 120, height: 120)
                     .rotationEffect(.degrees(-90))
-                    .animation(.easeInOut(duration: 0.5), value: confirmedIDs.count)
+                    .animation(.easeInOut(duration: 0.5), value: viewModel.confirmedCount)
 
                 VStack(spacing: 2) {
-                    Text("\(confirmedIDs.count)")
+                    Text("\(viewModel.confirmedCount)")
                         .font(.system(size: AppDimens.fontHero, weight: .bold))
                         .foregroundColor(AppColors.textPrimary)
-                    Text("/\(allStudents.count)")
+                    Text("/\(viewModel.totalStudents)")
                         .font(.system(size: AppDimens.fontSmall, weight: .medium))
                         .foregroundColor(AppColors.textSecondary)
                 }
@@ -113,10 +125,10 @@ struct LiveAttendanceView: View {
             HStack(spacing: AppDimens.spacingXS) {
                 Image(systemName: AppIcons.timer)
                     .font(.system(size: AppDimens.iconSM))
-                    .foregroundColor(timeRemaining < 60 ? AppColors.error : AppColors.textSecondary)
-                Text(formatTime(timeRemaining))
+                    .foregroundColor(viewModel.timeRemaining < 60 ? AppColors.error : AppColors.textSecondary)
+                Text(formatTime(viewModel.timeRemaining))
                     .font(.system(size: AppDimens.fontCallout, weight: .medium))
-                    .foregroundColor(timeRemaining < 60 ? AppColors.error : AppColors.textSecondary)
+                    .foregroundColor(viewModel.timeRemaining < 60 ? AppColors.error : AppColors.textSecondary)
             }
         }
         .padding(AppDimens.spacingXXL)
@@ -124,45 +136,50 @@ struct LiveAttendanceView: View {
         .background(AppColors.cardBackground)
     }
 
-    // MARK: - Students List (ALL students shown)
-
-    private var studentsList: some View {
+    private var confirmedList: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppDimens.spacingSM) {
-                ForEach(allStudents) { student in
-                    let isConfirmed = confirmedIDs.contains(student.id)
-
+                if viewModel.confirmados.isEmpty {
+                    Text("Aguardando alunos confirmarem…")
+                        .font(.system(size: AppDimens.fontCaption))
+                        .foregroundColor(AppColors.textSecondary)
+                        .padding(.top, AppDimens.spacingXL)
+                }
+                ForEach(viewModel.confirmados) { student in
                     HStack(spacing: AppDimens.spacingMD) {
                         ZStack {
                             Circle()
-                                .fill((isConfirmed ? AppColors.success : AppColors.textTertiary).opacity(0.12))
+                                .fill(AppColors.success.opacity(0.12))
                                 .frame(width: 36, height: 36)
-                            Text(student.initials)
+                            Text(initials(student.name))
                                 .font(.system(size: AppDimens.fontCaption, weight: .semibold))
-                                .foregroundColor(isConfirmed ? AppColors.success : AppColors.textTertiary)
+                                .foregroundColor(AppColors.success)
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(student.name)
                                 .font(.system(size: AppDimens.fontSmall, weight: .semibold))
-                                .foregroundColor(isConfirmed ? AppColors.textPrimary : AppColors.textTertiary)
-                            if isConfirmed, let time = student.confirmedAt {
-                                Text(time)
-                                    .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
+                                .foregroundColor(AppColors.textPrimary)
+                            Text(student.matricula)
+                                .font(.system(size: AppDimens.fontCaption, weight: .regular))
+                                .foregroundColor(AppColors.textSecondary)
                         }
 
                         Spacer()
 
-                        Image(systemName: isConfirmed ? AppIcons.checkCircleFill : AppIcons.checkCircle)
+                        if let time = student.confirmedAt {
+                            Text(time)
+                                .font(.system(size: AppDimens.fontCaption, weight: .regular))
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+
+                        Image(systemName: AppIcons.checkCircleFill)
                             .font(.system(size: AppDimens.iconMD))
-                            .foregroundColor(isConfirmed ? AppColors.success : AppColors.textTertiary.opacity(0.4))
+                            .foregroundColor(AppColors.success)
                     }
                     .padding(AppDimens.spacingMD)
                     .background(AppColors.cardBackground)
                     .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusSM))
-                    .animation(.easeInOut(duration: 0.3), value: isConfirmed)
                 }
             }
             .padding(.horizontal, AppDimens.spacingXXL)
@@ -170,11 +187,9 @@ struct LiveAttendanceView: View {
         }
     }
 
-    // MARK: - Close Button
-
     private var closeButton: some View {
         Button {
-            stopTimer()
+            viewModel.stop()
             showSummary = true
         } label: {
             HStack(spacing: AppDimens.spacingSM) {
@@ -193,48 +208,16 @@ struct LiveAttendanceView: View {
         .padding(AppDimens.spacingXXL)
     }
 
-    // MARK: - Helpers
-
     private func formatTime(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
+        let m = max(seconds, 0) / 60
+        let s = max(seconds, 0) % 60
         return String(format: "%02d:%02d", m, s)
     }
 
-    private func startSimulation() {
-        let presentStudents = allStudents.filter { $0.isPresent }
-        var index = 0
-
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if timeRemaining > 0 {
-                timeRemaining -= 1
-            }
-
-            if index < presentStudents.count && Int.random(in: 0...2) == 0 {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                    confirmedIDs.insert(presentStudents[index].id)
-                }
-                index += 1
-            }
-
-            if timeRemaining == 0 {
-                stopTimer()
-                showSummary = true
-            }
-        }
+    private func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        let f = parts.first?.prefix(1) ?? ""
+        let l = parts.count > 1 ? parts.last!.prefix(1) : ""
+        return "\(f)\(l)".uppercased()
     }
-
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
-    }
-}
-
-#Preview {
-    LiveAttendanceView(
-        className: "Programação Web",
-        classType: .first,
-        totalStudents: 35,
-        durationMinutes: 1
-    )
 }

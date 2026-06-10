@@ -11,6 +11,8 @@ struct AttendanceConfirmedView: View {
     let className: String
     let time: String
     let elapsedTime: TimeInterval
+    let didConfirm: Bool
+    let failureReasons: [String]
     let onDismiss: () -> Void
 
     @State private var checkScale: CGFloat = 0
@@ -20,6 +22,18 @@ struct AttendanceConfirmedView: View {
         String(format: "%.1fs", elapsedTime)
     }
 
+    private var accentColor: Color {
+        didConfirm ? AppColors.success : AppColors.error
+    }
+
+    private var titleText: String {
+        didConfirm ? AppStrings.presenceConfirmed : "Presença não validada"
+    }
+
+    private var iconName: String {
+        didConfirm ? AppIcons.checkmarkSeal : AppIcons.xCircleFill
+    }
+
     var body: some View {
         ZStack {
             AppColors.background.ignoresSafeArea()
@@ -27,9 +41,13 @@ struct AttendanceConfirmedView: View {
             VStack(spacing: AppDimens.spacingXXXL) {
                 Spacer()
 
-                checkmarkIcon
+                iconView
                 titleSection
                 detailsCard
+
+                if !didConfirm && !failureReasons.isEmpty {
+                    reasonsCard
+                }
 
                 Spacer()
 
@@ -47,23 +65,24 @@ struct AttendanceConfirmedView: View {
         }
     }
 
-    private var checkmarkIcon: some View {
+    private var iconView: some View {
         ZStack {
             Circle()
-                .fill(AppColors.success.opacity(0.15))
+                .fill(accentColor.opacity(0.15))
                 .frame(width: 100, height: 100)
-            Image(systemName: AppIcons.checkmarkSeal)
+            Image(systemName: iconName)
                 .font(.system(size: 56, weight: .medium))
-                .foregroundColor(AppColors.success)
+                .foregroundColor(accentColor)
         }
         .scaleEffect(checkScale)
     }
 
     private var titleSection: some View {
-        Text(AppStrings.presenceConfirmed)
+        Text(titleText)
             .font(.system(size: AppDimens.fontTitle1, weight: .bold))
-            .foregroundColor(AppColors.success)
+            .foregroundColor(accentColor)
             .opacity(contentOpacity)
+            .multilineTextAlignment(.center)
     }
 
     private var detailsCard: some View {
@@ -72,12 +91,35 @@ struct AttendanceConfirmedView: View {
             Divider()
             detailRow(label: AppStrings.schedule, value: time)
             Divider()
-            detailRow(label: AppStrings.time, value: elapsedFormatted, valueColor: AppColors.success)
+            detailRow(label: AppStrings.time, value: elapsedFormatted, valueColor: accentColor)
         }
         .padding(AppDimens.spacingXL)
         .background(AppColors.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+        .opacity(contentOpacity)
+    }
+
+    private var reasonsCard: some View {
+        VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
+            Text("Motivos")
+                .font(.system(size: AppDimens.fontCallout, weight: .semibold))
+                .foregroundColor(AppColors.textPrimary)
+            ForEach(failureReasons, id: \.self) { reason in
+                HStack(spacing: AppDimens.spacingSM) {
+                    Image(systemName: AppIcons.xCircleFill)
+                        .font(.system(size: AppDimens.iconSM))
+                        .foregroundColor(AppColors.error)
+                    Text(reason)
+                        .font(.system(size: AppDimens.fontSmall))
+                        .foregroundColor(AppColors.textSecondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppDimens.spacingXL)
+        .background(AppColors.error.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
         .opacity(contentOpacity)
     }
 
@@ -112,10 +154,22 @@ struct AttendanceConfirmedView: View {
     }
 }
 
-#Preview {
+#Preview("Sucesso") {
     AttendanceConfirmedView(
         className: "Cálculo Diferencial",
         time: "14:00",
-        elapsedTime: 1.7
+        elapsedTime: 1.7,
+        didConfirm: true,
+        failureReasons: []
+    ) {}
+}
+
+#Preview("Falha") {
+    AttendanceConfirmedView(
+        className: "Cálculo Diferencial",
+        time: "14:00",
+        elapsedTime: 2.3,
+        didConfirm: false,
+        failureReasons: ["Código incorreto", "Localização fora do raio"]
     ) {}
 }

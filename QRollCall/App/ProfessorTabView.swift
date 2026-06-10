@@ -2,45 +2,40 @@
 //  ProfessorTabView.swift
 //  QRollCall
 //
-//  Created by Antônio Paes on 15/04/26.
-//
 
 import SwiftUI
 
 struct ProfessorTabView: View {
-    @State private var selectedTab = 0
+
+    enum Tab: Hashable {
+        case home, classes, history, profile
+        case search
+    }
+
+    @State private var selection: Tab = .home
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            ProfessorHomeView()
-                .tabItem {
-                    Image(systemName: AppIcons.home)
-                    Text(AppStrings.tabHome)
+        TabView(selection: $selection) {
+            SwiftUI.Tab("Home", systemImage: AppIcons.home, value: Tab.home) {
+                ProfessorHomeView()
+            }
+            SwiftUI.Tab(AppStrings.tabClasses, systemImage: AppIcons.classes, value: Tab.classes) {
+                ClassesView()
+            }
+            SwiftUI.Tab(AppStrings.tabHistory, systemImage: AppIcons.history, value: Tab.history) {
+                ProfessorHistoryView()
+            }
+            SwiftUI.Tab(AppStrings.tabProfile, systemImage: AppIcons.profile, value: Tab.profile) {
+                ProfessorProfileView()
+            }
+            SwiftUI.Tab(value: Tab.search, role: .search) {
+                NavigationStack {
+                    ProfessorSearchContent()
                 }
-                .tag(0)
-
-            ClassesView()
-                .tabItem {
-                    Image(systemName: AppIcons.classes)
-                    Text(AppStrings.tabClasses)
-                }
-                .tag(1)
-
-            ProfessorHistoryView()
-                .tabItem {
-                    Image(systemName: AppIcons.history)
-                    Text(AppStrings.tabHistory)
-                }
-                .tag(2)
-
-            ProfessorProfileView()
-                .tabItem {
-                    Image(systemName: AppIcons.profile)
-                    Text(AppStrings.tabProfile)
-                }
-                .tag(3)
+            }
         }
         .tint(AppColors.primary)
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 }
 

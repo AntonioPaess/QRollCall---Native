@@ -8,48 +8,32 @@
 import SwiftUI
 
 struct AttendanceDetailView: View {
-    let attendance: PastAttendance
-
-    @State private var presentIDs: Set<UUID>
-    @State private var isEditing = false
-
-    private let allStudents = ProfessorHomeMockData.studentsForClass
-
-    init(attendance: PastAttendance) {
-        self.attendance = attendance
-        let presentSet = Set(ProfessorHomeMockData.studentsForClass.filter { $0.isPresent }.map(\.id))
-        self._presentIDs = State(initialValue: presentSet)
-    }
-
-    private var presentStudents: [StudentAttendanceRecord] {
-        allStudents.filter { presentIDs.contains($0.id) }
-    }
-
-    private var absentStudents: [StudentAttendanceRecord] {
-        allStudents.filter { !presentIDs.contains($0.id) }
-    }
+    let attendance: ChamadaPassadaDTO
+    @StateObject private var viewModel = AttendanceDetailViewModel()
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppDimens.spacingXL) {
                 infoCard
 
+                if let msg = viewModel.errorMessage {
+                    Text(msg)
+                        .font(.system(size: AppDimens.fontCaption))
+                        .foregroundColor(AppColors.error)
+                }
+
                 studentSection(
                     title: AppStrings.presentStudents,
-                    count: presentStudents.count,
                     icon: AppIcons.checkCircleFill,
                     color: AppColors.success,
-                    students: presentStudents,
-                    isPresent: true
+                    students: viewModel.detalhe?.presentes ?? []
                 )
 
                 studentSection(
                     title: AppStrings.absentStudents,
-                    count: absentStudents.count,
                     icon: AppIcons.xCircleFill,
                     color: AppColors.error,
-                    students: absentStudents,
-                    isPresent: false
+                    students: viewModel.detalhe?.ausentes ?? []
                 )
             }
             .padding(.horizontal, AppDimens.spacingXXL)
@@ -58,42 +42,35 @@ struct AttendanceDetailView: View {
         .background(AppColors.background)
         .navigationTitle(AppStrings.attendanceDetail)
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    withAnimation { isEditing.toggle() }
-                } label: {
-                    Text(isEditing ? "Salvar" : "Editar")
-                        .font(.system(size: AppDimens.fontSmall, weight: .semibold))
-                        .foregroundColor(AppColors.primary)
-                }
-            }
-        }
+        .task { await viewModel.load(chamadaId: attendance.id) }
+        .refreshable { await viewModel.load(chamadaId: attendance.id) }
     }
 
-    // MARK: - Info Card
-
     private var infoCard: some View {
-        VStack(spacing: AppDimens.spacingMD) {
-            Text(attendance.className)
+        let presentes = viewModel.detalhe?.presentes.count ?? attendance.presentCount
+        let ausentes = viewModel.detalhe?.ausentes.count ?? (attendance.totalCount - attendance.presentCount)
+        return VStack(spacing: AppDimens.spacingMD) {
+            Text(viewModel.detalhe?.className ?? attendance.className)
                 .font(.system(size: AppDimens.fontTitle2, weight: .bold))
                 .foregroundColor(.white)
 
-            Text("\(attendance.date) • \(attendance.time)")
+            Text("\(viewModel.detalhe?.date ?? attendance.date) • \(viewModel.detalhe?.time ?? attendance.time)")
                 .font(.system(size: AppDimens.fontBody, weight: .regular))
                 .foregroundColor(.white.opacity(0.8))
 
-            Text(attendance.classType.rawValue)
-                .font(.system(size: AppDimens.fontCaption, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.horizontal, AppDimens.spacingMD)
-                .padding(.vertical, AppDimens.spacingXS)
-                .background(.white.opacity(0.2))
-                .clipShape(Capsule())
+            if let type = viewModel.detalhe?.classType ?? attendance.classType {
+                Text(type)
+                    .font(.system(size: AppDimens.fontCaption, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, AppDimens.spacingMD)
+                    .padding(.vertical, AppDimens.spacingXS)
+                    .background(.white.opacity(0.2))
+                    .clipShape(Capsule())
+            }
 
             HStack(spacing: AppDimens.spacingXXXL) {
                 VStack(spacing: AppDimens.spacingXS) {
-                    Text("\(presentStudents.count)")
+                    Text("\(presentes)")
                         .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
                         .foregroundColor(AppColors.success)
                     Text(AppStrings.presentStudents)
@@ -101,7 +78,7 @@ struct AttendanceDetailView: View {
                         .foregroundColor(.white.opacity(0.8))
                 }
                 VStack(spacing: AppDimens.spacingXS) {
-                    Text("\(absentStudents.count)")
+                    Text("\(ausentes)")
                         .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
                         .foregroundColor(AppColors.error)
                     Text(AppStrings.absentStudents)
@@ -123,9 +100,7 @@ struct AttendanceDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
     }
 
-    // MARK: - Student Section
-
-    private func studentSection(title: String, count: Int, icon: String, color: Color, students: [StudentAttendanceRecord], isPresent: Bool) -> some View {
+    private func studentSection(title: String, icon: String, color: Color, students: [ChamadaDetalheDTO.AlunoStatusDTO]) -> some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
             HStack(spacing: AppDimens.spacingSM) {
                 Image(systemName: icon)
@@ -134,9 +109,15 @@ struct AttendanceDetailView: View {
                     .font(.system(size: AppDimens.fontCallout, weight: .semibold))
                     .foregroundColor(AppColors.textPrimary)
                 Spacer()
-                Text("\(count)")
+                Text("\(students.count)")
                     .font(.system(size: AppDimens.fontCallout, weight: .bold))
                     .foregroundColor(color)
+            }
+
+            if students.isEmpty && !viewModel.isLoading {
+                Text("—")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
             }
 
             ForEach(students) { student in
@@ -145,7 +126,7 @@ struct AttendanceDetailView: View {
                         Circle()
                             .fill(color.opacity(0.12))
                             .frame(width: 36, height: 36)
-                        Text(student.initials)
+                        Text(initials(student.name))
                             .font(.system(size: AppDimens.fontCaption, weight: .semibold))
                             .foregroundColor(color)
                     }
@@ -161,20 +142,10 @@ struct AttendanceDetailView: View {
 
                     Spacer()
 
-                    if isEditing {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if isPresent {
-                                    presentIDs.remove(student.id)
-                                } else {
-                                    presentIDs.insert(student.id)
-                                }
-                            }
-                        } label: {
-                            Image(systemName: isPresent ? AppIcons.xCircleFill : AppIcons.checkCircleFill)
-                                .font(.system(size: AppDimens.iconLG))
-                                .foregroundColor(isPresent ? AppColors.error : AppColors.success)
-                        }
+                    if let confirmed = student.confirmedAt, !confirmed.isEmpty {
+                        Text(confirmed)
+                            .font(.system(size: AppDimens.fontCaption, weight: .medium))
+                            .foregroundColor(AppColors.textSecondary)
                     }
                 }
                 .padding(AppDimens.spacingMD)
@@ -183,10 +154,26 @@ struct AttendanceDetailView: View {
             }
         }
     }
+
+    private func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        let f = parts.first?.prefix(1) ?? ""
+        let l = parts.count > 1 ? parts.last!.prefix(1) : ""
+        return "\(f)\(l)".uppercased()
+    }
 }
 
 #Preview {
     NavigationStack {
-        AttendanceDetailView(attendance: ProfessorHomeMockData.pastAttendances[0])
+        AttendanceDetailView(attendance: ChamadaPassadaDTO(
+            id: 1,
+            className: "Programação Web",
+            date: "Hoje",
+            time: "10:00",
+            presentCount: 32,
+            totalCount: 35,
+            presencePercentage: 91,
+            classType: "PRIMEIRA"
+        ))
     }
 }

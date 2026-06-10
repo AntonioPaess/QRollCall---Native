@@ -172,4 +172,59 @@ enum AppStrings {
     static let tabHome = "Home"
     static let tabHistory = "Histórico"
     static let tabProfile = "Perfil"
+    static let tabTurmas = "Turmas"
+    static let tabAbono = "Abono"
+    static let tabMetricas = "Métricas"
+
+    // MARK: - Coordenação
+
+    static let coordHomeGreeting = "Coordenação"
+    static let coordHomeSubtitle = "Visão geral das turmas"
+    static let coordKpiAlunos = "Alunos"
+    static let coordKpiTurmas = "Turmas"
+    static let coordKpiEmRisco = "Em risco"
+    static let coordKpiReprovados = "Reprovados"
+    static let coordRecentTurmas = "Turmas ativas"
+    static let coordEmptyTurmas = "Nenhuma turma criada ainda"
+    static let coordCreateTurma = "Criar turma"
+    static let coordTurmaName = "Nome da turma"
+    static let coordTurmaSemestre = "Semestre (ex: 2024.1)"
+    static let coordAddAlunos = "Adicionar alunos"
+    static let coordAddMaterias = "Adicionar matérias"
+    static let coordAlunosLista = "Alunos da turma"
+    static let coordMateriasLista = "Matérias da turma"
+
+    // MARK: - Abono
+
+    static let abonoTitle = "Abono em Massa"
+    static let abonoSubtitle = "Selecione faltas para abonar"
+    static let abonoSelectAluno = "Selecione o aluno"
+    static let abonoSelectMateria = "Filtrar por matéria"
+    static let abonoMotivo = "Motivo do abono"
+    static let abonoMotivoPlaceholder = "Ex: atestado médico, atividade externa..."
+    static let abonoByDates = "Abonar por período"
+    static let abonoByList = "Abonar por seleção"
+    static let abonoDataInicio = "Data início"
+    static let abonoDataFim = "Data fim"
+    static let abonoConfirm = "Confirmar abono"
+    static let abonoSelected = "selecionada(s)"
+    static let abonoEmptyState = "Sem faltas no período"
+    static let abonoSuccess = "Abono registrado"
+
+    // MARK: - Métricas
+
+    static let metricasTitle = "Métricas"
+    static let metricasFaltas = "faltas"
+    static let metricasDe = "de"
+    static let statusOk = "Em dia"
+    static let statusAlerta = "Atenção"
+    static let statusEmRisco = "Em risco"
+    static let statusReprovado = "Reprovado"
+
+    // MARK: - History (extra)
+
+    static let historyByMateria = "Por matéria"
+    static let historyAllAttendances = "Todas as chamadas"
+    static let historyLimitLabel = "Limite"
+    static let historyFaltasShort = "Faltas"
 }

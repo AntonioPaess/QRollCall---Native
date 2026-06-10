@@ -10,15 +10,22 @@ import SwiftUI
 struct AttendanceSummaryView: View {
     @Environment(\.dismiss) private var dismiss
 
+    let chamada: ChamadaCreatedDTO
     let className: String
     let classType: ClassType
-    let presentStudents: [StudentAttendanceRecord]
-    let absentStudents: [StudentAttendanceRecord]
+    let presentStudents: [LiveAttendanceDTO.ConfirmadoDTO]
     let totalStudents: Int
+
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
 
     private var presencePercentage: Int {
         guard totalStudents > 0 else { return 0 }
         return Int(round(Double(presentStudents.count) / Double(totalStudents) * 100))
+    }
+
+    private var absentCount: Int {
+        max(totalStudents - presentStudents.count, 0)
     }
 
     var body: some View {
@@ -26,8 +33,12 @@ struct AttendanceSummaryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: AppDimens.spacingXL) {
                     summaryHeader
+                    if let msg = errorMessage {
+                        Text(msg)
+                            .font(.system(size: AppDimens.fontCaption))
+                            .foregroundColor(AppColors.error)
+                    }
                     presentSection
-                    absentSection
                     concludeButton
                 }
                 .padding(.horizontal, AppDimens.spacingXXL)
@@ -38,8 +49,6 @@ struct AttendanceSummaryView: View {
             .navigationBarTitleDisplayMode(.large)
         }
     }
-
-    // MARK: - Summary Header
 
     private var summaryHeader: some View {
         VStack(spacing: AppDimens.spacingLG) {
@@ -58,7 +67,7 @@ struct AttendanceSummaryView: View {
             HStack(spacing: 0) {
                 summaryColumn(value: "\(presentStudents.count)", label: AppStrings.presentStudents, color: AppColors.success)
                 Rectangle().fill(.white.opacity(0.25)).frame(width: 1, height: 40)
-                summaryColumn(value: "\(absentStudents.count)", label: AppStrings.absentStudents, color: AppColors.error)
+                summaryColumn(value: "\(absentCount)", label: AppStrings.absentStudents, color: AppColors.error)
                 Rectangle().fill(.white.opacity(0.25)).frame(width: 1, height: 40)
                 summaryColumn(value: "\(presencePercentage)%", label: AppStrings.rate, color: .white)
             }
@@ -86,8 +95,6 @@ struct AttendanceSummaryView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Present Section
-
     private var presentSection: some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
             HStack(spacing: AppDimens.spacingSM) {
@@ -102,8 +109,14 @@ struct AttendanceSummaryView: View {
                     .foregroundColor(AppColors.success)
             }
 
+            if presentStudents.isEmpty {
+                Text("Nenhum aluno confirmou.")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.textSecondary)
+            }
+
             ForEach(presentStudents) { student in
-                studentRow(student: student, isPresent: true)
+                studentRow(student: student)
             }
         }
         .padding(AppDimens.spacingXL)
@@ -111,40 +124,15 @@ struct AttendanceSummaryView: View {
         .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
     }
 
-    // MARK: - Absent Section
-
-    private var absentSection: some View {
-        VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
-            HStack(spacing: AppDimens.spacingSM) {
-                Image(systemName: AppIcons.xCircleFill)
-                    .foregroundColor(AppColors.error)
-                Text(AppStrings.absentStudents)
-                    .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                    .foregroundColor(AppColors.textPrimary)
-                Spacer()
-                Text("\(absentStudents.count)")
-                    .font(.system(size: AppDimens.fontCallout, weight: .bold))
-                    .foregroundColor(AppColors.error)
-            }
-
-            ForEach(absentStudents) { student in
-                studentRow(student: student, isPresent: false)
-            }
-        }
-        .padding(AppDimens.spacingXL)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-    }
-
-    private func studentRow(student: StudentAttendanceRecord, isPresent: Bool) -> some View {
+    private func studentRow(student: LiveAttendanceDTO.ConfirmadoDTO) -> some View {
         HStack(spacing: AppDimens.spacingMD) {
             ZStack {
                 Circle()
-                    .fill((isPresent ? AppColors.success : AppColors.error).opacity(0.12))
+                    .fill(AppColors.success.opacity(0.12))
                     .frame(width: 36, height: 36)
-                Text(student.initials)
+                Text(initials(student.name))
                     .font(.system(size: AppDimens.fontCaption, weight: .semibold))
-                    .foregroundColor(isPresent ? AppColors.success : AppColors.error)
+                    .foregroundColor(AppColors.success)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -158,7 +146,7 @@ struct AttendanceSummaryView: View {
 
             Spacer()
 
-            if isPresent, let time = student.confirmedAt {
+            if let time = student.confirmedAt {
                 Text(time)
                     .font(.system(size: AppDimens.fontCaption, weight: .medium))
                     .foregroundColor(AppColors.textSecondary)
@@ -166,30 +154,48 @@ struct AttendanceSummaryView: View {
         }
     }
 
-    // MARK: - Conclude
+    private func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        let f = parts.first?.prefix(1) ?? ""
+        let l = parts.count > 1 ? parts.last!.prefix(1) : ""
+        return "\(f)\(l)".uppercased()
+    }
 
     private var concludeButton: some View {
         Button {
-            NotificationCenter.default.post(name: .dismissAttendanceFlow, object: nil)
+            Task { await finalize() }
         } label: {
-            Text(AppStrings.conclude)
-                .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: AppDimens.buttonHeight)
-                .background(AppColors.primary)
-                .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
+            ZStack {
+                Text(AppStrings.conclude)
+                    .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
+                    .foregroundColor(.white)
+                    .opacity(isSubmitting ? 0 : 1)
+                if isSubmitting {
+                    ProgressView().tint(.white)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: AppDimens.buttonHeight)
+            .background(AppColors.primary)
+            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
         }
         .buttonStyle(.plain)
+        .disabled(isSubmitting)
     }
-}
 
-#Preview {
-    AttendanceSummaryView(
-        className: "Programação Web",
-        classType: .first,
-        presentStudents: Array(ProfessorHomeMockData.studentsForClass.prefix(5)),
-        absentStudents: Array(ProfessorHomeMockData.studentsForClass.suffix(3)),
-        totalStudents: 35
-    )
+    private func finalize() async {
+        isSubmitting = true
+        defer { isSubmitting = false }
+        let presentes = presentStudents.map(\.alunoId)
+        do {
+            try await ChamadaService.encerrarComResumo(
+                chamada.idChamada,
+                resumo: EncerrarComResumoDTO(alunosPresentes: presentes, alunosAusentes: [])
+            )
+            NotificationCenter.default.post(name: .dismissAttendanceFlow, object: nil)
+            dismiss()
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? "Falha ao encerrar."
+        }
+    }
 }

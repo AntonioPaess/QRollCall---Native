@@ -2,228 +2,229 @@
 //  HomeView.swift
 //  QRollCall
 //
-//  Created by Antônio Paes on 08/04/26.
-//
 
 import SwiftUI
 
 struct HomeView: View {
-    @State private var showAttendanceFlow = false
-    @State private var hasActiveAttendance = true
-
-    private let user = MockData.user
-    private let nextClass = MockData.nextClass
-    private let stats = MockData.stats
-    private let activities = MockData.recentActivities
+    @EnvironmentObject private var auth: AuthSession
+    @StateObject private var viewModel = StudentHomeViewModel()
+    @State private var selectedAttendance: ChamadaAtivaDTO?
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                headerSection
-                mainContent
-            }
-        }
-        .ignoresSafeArea(edges: .top)
-        .background(AppColors.background)
-        .fullScreenCover(isPresented: $showAttendanceFlow) {
-            AttendanceFlowView()
-        }
-    }
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: AppDimens.spacingXL) {
+                    PremiumHeader(
+                        greeting: AppStrings.greeting,
+                        title: auth.firstName.isEmpty ? auth.fullName : auth.firstName
+                    )
 
-    // MARK: - Header
+                    if let message = viewModel.errorMessage {
+                        Text(message)
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppColors.danger)
+                    }
 
-    private var headerSection: some View {
-        LinearGradient(
-            colors: AppColors.headerGradient,
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .frame(height: 160)
-        .overlay(alignment: .bottomLeading) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                    Text(AppStrings.greeting)
-                        .font(.system(size: AppDimens.fontCallout, weight: .regular))
-                        .foregroundColor(.white.opacity(0.85))
-                    Text(user.fullName)
-                        .font(.system(size: AppDimens.fontLargeTitle, weight: .bold))
-                        .foregroundColor(.white)
+                    if let active = viewModel.firstActiveAttendance {
+                        liveAttendanceBanner(active)
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.94).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                    }
+
+                    nextClassCard
+                    statsGrid
+                    recentActivitySection
                 }
-
-                Spacer()
-
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(0.25))
-                        .frame(width: AppDimens.avatarSize, height: AppDimens.avatarSize)
-                    Text(user.initials)
-                        .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
-                        .foregroundColor(.white)
+                .padding(.horizontal, AppDimens.spacingXXL)
+                .padding(.top, AppDimens.spacingLG)
+                .padding(.bottom, AppDimens.spacing4XL)
+                .animation(.spring(duration: 0.4), value: viewModel.firstActiveAttendance?.id)
+            }
+            .background(AppColors.background)
+            .navigationBarHidden(true)
+            .refreshable { await viewModel.load() }
+            .task {
+                // Carga inicial + polling leve a cada 5s. Cancela ao sair da tela.
+                await viewModel.load()
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    if Task.isCancelled { break }
+                    await viewModel.pollActiveAttendances()
                 }
             }
-            .padding(.horizontal, AppDimens.spacingXXL)
-            .padding(.bottom, AppDimens.spacingXL)
-        }
-    }
-
-    // MARK: - Main Content
-
-    private var mainContent: some View {
-        VStack(spacing: AppDimens.spacingXL) {
-            if hasActiveAttendance {
-                activeAttendanceBanner
+            .fullScreenCover(item: $selectedAttendance, onDismiss: {
+                Task { await viewModel.load() }
+            }) { attendance in
+                AttendanceFlowView(attendance: attendance)
             }
-            nextClassCard
-            statsGrid
-            recentActivitySection
         }
-        .padding(.horizontal, AppDimens.spacingXXL)
-        .padding(.bottom, AppDimens.spacingXXL)
     }
 
-    // MARK: - Active Attendance Banner
+    // MARK: - Live attendance banner
 
-    private var activeAttendanceBanner: some View {
+    private func liveAttendanceBanner(_ active: ChamadaAtivaDTO) -> some View {
         Button {
-            showAttendanceFlow = true
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            selectedAttendance = active
         } label: {
-            HStack(spacing: AppDimens.spacingLG) {
-                ZStack {
-                    Circle()
-                        .fill(AppColors.success.opacity(0.15))
-                        .frame(width: AppDimens.activityIconSize, height: AppDimens.activityIconSize)
-                    Image(systemName: AppIcons.checkCircleFill)
-                        .font(.system(size: AppDimens.iconLG))
-                        .foregroundColor(AppColors.success)
-                }
+            HStack(spacing: AppDimens.spacingMD) {
+                LivePulse(color: AppColors.success)
 
-                VStack(alignment: .leading, spacing: AppDimens.spacingXS) {
-                    Text(AppStrings.activeAttendance)
-                        .font(.system(size: AppDimens.fontCallout, weight: .bold))
-                        .foregroundColor(AppColors.textPrimary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(active.materiaNome.isEmpty ? AppStrings.activeAttendance : active.materiaNome)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
                     Text(AppStrings.tapToRegister)
-                        .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                        .foregroundColor(AppColors.textSecondary)
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppColors.textSecondary)
                 }
 
                 Spacer()
 
                 Image(systemName: AppIcons.chevronRight)
-                    .font(.system(size: AppDimens.iconSM, weight: .semibold))
-                    .foregroundColor(AppColors.success)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.success)
             }
             .padding(AppDimens.spacingLG)
-            .background(AppColors.success.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppDimens.radiusMD)
-                    .stroke(AppColors.success.opacity(0.3), lineWidth: 1)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(AppColors.success.opacity(0.10))
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(AppColors.success.opacity(0.45), lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Next Class Card
+    // MARK: - Next class
 
     private var nextClassCard: some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
-            HStack(spacing: AppDimens.spacingSM) {
+            HStack(spacing: 6) {
                 Image(systemName: AppIcons.clock)
-                    .font(.system(size: AppDimens.iconMD))
-                    .foregroundColor(AppColors.primary)
-                Text(AppStrings.nextClass)
-                    .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                    .foregroundColor(AppColors.textSecondary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textTertiary)
+                Text(AppStrings.nextClass.uppercased())
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .tracking(0.5)
             }
 
-            Text(nextClass.name)
-                .font(.system(size: AppDimens.fontTitle1, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
+            if let next = viewModel.nextClass {
+                Text(next.nome)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
 
-            Text("\(nextClass.startTime) - \(nextClass.endTime) • \(nextClass.room)")
-                .font(.system(size: AppDimens.fontBody, weight: .regular))
-                .foregroundColor(AppColors.textSecondary)
+                Text("\(next.startTime) – \(next.endTime) · \(next.sala)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppColors.textSecondary)
 
-            HStack {
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(AppColors.primaryOpacity(0.15))
-                            .frame(height: AppDimens.progressBarHeight)
-                        Capsule()
-                            .fill(AppColors.primary)
-                            .frame(width: geometry.size.width * nextClass.progress, height: AppDimens.progressBarHeight)
+                HStack(spacing: AppDimens.spacingMD) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(AppColors.surfaceMuted).frame(height: 4)
+                            Capsule()
+                                .fill(AppColors.primary)
+                                .frame(width: geo.size.width * next.progress, height: 4)
+                        }
                     }
+                    .frame(height: 4)
+                    Text(next.timeUntil)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .fixedSize()
                 }
-                .frame(height: AppDimens.progressBarHeight)
-
-                Text(nextClass.timeUntil)
-                    .font(.system(size: AppDimens.fontCaption, weight: .medium))
-                    .foregroundColor(AppColors.textSecondary)
-                    .fixedSize()
+            } else {
+                Text("Sem aulas agendadas")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppColors.textSecondary)
             }
         }
-        .padding(AppDimens.spacingXL)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusLG))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppDimens.spacingLG)
+        .minimalCard(corner: 16)
     }
 
-    // MARK: - Stats Grid
+    // MARK: - Stats grid
 
     private var statsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: AppDimens.spacingMD), GridItem(.flexible(), spacing: AppDimens.spacingMD)], spacing: AppDimens.spacingMD) {
-            StatCard(
-                icon: AppIcons.chartUp,
-                iconColor: AppColors.success,
-                title: AppStrings.presence,
-                value: "\(stats.presencePercentage)%",
-                subtitle: stats.presenceChange,
-                subtitleColor: AppColors.success
-            )
-            StatCard(
-                icon: AppIcons.checkCircle,
-                iconColor: AppColors.primary,
-                title: AppStrings.classes,
-                value: "\(stats.totalClasses)",
-                subtitle: AppStrings.confirmed,
-                subtitleColor: AppColors.textSecondary
-            )
-            StatCard(
-                icon: AppIcons.xCircle,
-                iconColor: AppColors.error,
-                title: AppStrings.absences,
-                value: "\(stats.absences)",
-                subtitle: AppStrings.thisSemester,
-                subtitleColor: AppColors.textSecondary
-            )
-            StatCard(
-                icon: AppIcons.flame,
-                iconColor: AppColors.warning,
-                title: AppStrings.streak,
-                value: "\(stats.streakDays)",
-                subtitle: AppStrings.consecutiveDays,
-                subtitleColor: AppColors.textSecondary
-            )
+        let s = viewModel.stats
+        return LazyVGrid(
+            columns: [GridItem(.flexible(), spacing: AppDimens.spacingMD),
+                      GridItem(.flexible(), spacing: AppDimens.spacingMD)],
+            spacing: AppDimens.spacingMD
+        ) {
+            KPICard(title: AppStrings.presence,
+                    value: "\(s?.presencePercentage ?? 0)%",
+                    icon: AppIcons.chartUp,
+                    tint: AppColors.success)
+            KPICard(title: AppStrings.classes,
+                    value: "\(s?.totalClasses ?? 0)",
+                    icon: AppIcons.checkCircle,
+                    tint: AppColors.primary)
+            KPICard(title: AppStrings.absences,
+                    value: "\(s?.absences ?? 0)",
+                    icon: AppIcons.xCircle,
+                    tint: AppColors.danger)
+            KPICard(title: AppStrings.streak,
+                    value: "\(s?.streakDays ?? 0)",
+                    icon: AppIcons.flame,
+                    tint: AppColors.warning)
         }
     }
 
-    // MARK: - Recent Activity
+    // MARK: - Recent activity
 
     private var recentActivitySection: some View {
         VStack(alignment: .leading, spacing: AppDimens.spacingMD) {
-            Text(AppStrings.recentActivity)
-                .font(.system(size: AppDimens.fontTitle2, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
+            SectionHeader(title: AppStrings.recentActivity)
 
-            ForEach(activities) { activity in
-                ActivityRow(activity: activity)
+            if viewModel.activities.isEmpty && !viewModel.isLoading {
+                EmptyState(
+                    icon: AppIcons.clock,
+                    title: "Sem atividades recentes",
+                    subtitle: "Suas confirmações aparecerão aqui."
+                )
+            } else {
+                ForEach(viewModel.activities) { activity in
+                    ActivityRow(activity: activity)
+                }
             }
         }
     }
 }
 
-// MARK: - Stat Card
+// MARK: - Live Pulse
+
+private struct LivePulse: View {
+    let color: Color
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(color.opacity(0.30))
+                .frame(width: 16, height: 16)
+                .scaleEffect(pulse ? 1.8 : 1.0)
+                .opacity(pulse ? 0 : 1)
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+        }
+        .frame(width: 16, height: 16)
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) {
+                pulse = true
+            }
+        }
+    }
+}
+
+// MARK: - Stat Card (legacy)
 
 struct StatCard: View {
     let icon: String
@@ -234,82 +235,80 @@ struct StatCard: View {
     let subtitleColor: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppDimens.spacingSM) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: AppDimens.fontSmall, weight: .medium))
-                    .foregroundColor(iconColor)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(iconColor)
                 Text(title)
-                    .font(.system(size: AppDimens.fontSmall, weight: .medium))
-                    .foregroundColor(AppColors.textSecondary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
             }
-
             Text(value)
-                .font(.system(size: AppDimens.fontHero, weight: .bold))
-                .foregroundColor(AppColors.textPrimary)
-
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppColors.textPrimary)
             Text(subtitle)
-                .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                .foregroundColor(subtitleColor)
+                .font(.system(size: 11))
+                .foregroundStyle(subtitleColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppDimens.spacingLG)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .minimalCard()
     }
 }
 
-// MARK: - Activity Row
+// MARK: - Activity row
 
 struct ActivityRow: View {
-    let activity: RecentActivity
+    let activity: AtividadeDTO
 
     private var statusColor: Color {
-        switch activity.status {
-        case .presente: return AppColors.success
-        case .ausente: return AppColors.error
-        case .justificado: return AppColors.warning
+        switch activity.status.lowercased() {
+        case "presente": return AppColors.success
+        case "ausente":  return AppColors.danger
+        default:         return AppColors.warning
         }
     }
 
     var body: some View {
-        HStack(spacing: AppDimens.spacingSM + 6) {
-            ZStack {
-                Circle()
-                    .fill(statusColor.opacity(0.12))
-                    .frame(width: AppDimens.activityIconSize, height: AppDimens.activityIconSize)
-                Image(systemName: activity.status == .presente ? AppIcons.checkCircleFill : AppIcons.xCircleFill)
-                    .font(.system(size: AppDimens.iconLG))
-                    .foregroundColor(statusColor)
-            }
+        HStack(spacing: AppDimens.spacingMD) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppColors.surfaceMuted)
+                .frame(width: 40, height: 40)
+                .overlay {
+                    Image(systemName: activity.status.lowercased() == "presente"
+                          ? AppIcons.checkCircleFill : AppIcons.xCircleFill)
+                        .font(.system(size: 16))
+                        .foregroundStyle(statusColor)
+                }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(activity.className)
-                    .font(.system(size: AppDimens.fontCallout, weight: .semibold))
-                    .foregroundColor(AppColors.textPrimary)
-                Text("\(activity.date) • \(activity.time)")
-                    .font(.system(size: AppDimens.fontCaption, weight: .regular))
-                    .foregroundColor(AppColors.textSecondary)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text("\(activity.date) · \(activity.time)")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppColors.textSecondary)
             }
 
             Spacer()
 
-            Text(activity.status.rawValue)
-                .font(.system(size: AppDimens.fontCaption, weight: .semibold))
-                .foregroundColor(statusColor)
-                .padding(.horizontal, AppDimens.spacingMD)
-                .padding(.vertical, 6)
-                .background(statusColor.opacity(0.1))
-                .clipShape(Capsule())
+            HStack(spacing: 5) {
+                Circle().fill(statusColor).frame(width: 5, height: 5)
+                Text(activity.status)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(AppColors.surfaceMuted, in: Capsule())
+            .overlay { Capsule().strokeBorder(AppColors.hairline, lineWidth: 0.5) }
         }
         .padding(AppDimens.spacingLG)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .minimalCard()
     }
 }
 
 #Preview {
-    HomeView()
+    HomeView().environmentObject(AuthSession.shared)
 }

@@ -2,27 +2,40 @@
 //  QRollCallApp.swift
 //  QRollCall
 //
-//  Created by Antônio Paes on 08/04/26.
-//
 
 import SwiftUI
 
 @main
 struct QRollCallApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @AppStorage("isLoggedIn") private var isLoggedIn = false
-    @AppStorage("userRole") private var userRole = UserRole.student.rawValue
+    @StateObject private var auth = AuthSession.shared
+
+    /// Splash inicial — sai após ~1.6s no SplashView.onAppear.
+    @State private var splashActive = true
 
     var body: some Scene {
         WindowGroup {
-            if !hasCompletedOnboarding {
-                OnboardingView()
-            } else if !isLoggedIn {
-                LoginView()
-            } else if userRole == UserRole.professor.rawValue {
-                ProfessorTabView()
-            } else {
-                ContentView()
+            ZStack {
+                Group {
+                    if !hasCompletedOnboarding {
+                        OnboardingView()
+                    } else if !auth.isAuthenticated {
+                        LoginView()
+                    } else if auth.role == .coordenacao {
+                        CoordenacaoTabView()
+                    } else if auth.role == .professor {
+                        ProfessorTabView()
+                    } else {
+                        ContentView()
+                    }
+                }
+                .environmentObject(auth)
+
+                if splashActive {
+                    SplashView(isActive: $splashActive)
+                        .transition(.opacity)
+                        .zIndex(10)
+                }
             }
         }
     }

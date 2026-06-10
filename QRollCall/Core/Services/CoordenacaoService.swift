@@ -64,6 +64,22 @@ struct CoordenacaoService {
                                            authenticated: true)
     }
 
+    /// Lista professores que lecionam ao menos uma matéria do curso.
+    static func professoresDoCurso(cursoId: Int64) async throws -> [ProfessorListDTO] {
+        try await APIClient.shared.request("/api/coordenacao/curso/\(cursoId)/professores",
+                                           method: .get,
+                                           body: EmptyBody?.none,
+                                           authenticated: true)
+    }
+
+    /// Registra um professor (mesmo endpoint público de cadastro).
+    static func registrarProfessor(_ dto: RegisterProfessorFormDTO) async throws {
+        _ = try await APIClient.shared.send("/api/auth/professor/register",
+                                            method: .post,
+                                            body: dto,
+                                            authenticated: false)
+    }
+
     // MARK: - Professores
 
     static func listarProfessores() async throws -> [ProfessorListDTO] {

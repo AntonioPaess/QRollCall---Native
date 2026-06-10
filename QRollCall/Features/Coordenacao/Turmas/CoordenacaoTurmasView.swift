@@ -174,13 +174,14 @@ private struct CursoRow: View {
 // MARK: - Curso Detail (tabs internas: Matérias, Turmas, Alunos)
 
 enum CursoTab: String, CaseIterable, Identifiable {
-    case materias, turmas, alunos
+    case materias, turmas, alunos, professores
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .materias: return "Matérias"
-        case .turmas:   return "Turmas"
-        case .alunos:   return "Alunos"
+        case .materias:    return "Matérias"
+        case .turmas:      return "Turmas"
+        case .alunos:      return "Alunos"
+        case .professores: return "Professores"
         }
     }
 }
@@ -193,10 +194,13 @@ struct CursoDetailView: View {
     @State private var grupos: [GrupoDTO] = []
     @State private var materias: [MateriaListDTO] = []
     @State private var alunos: [AlunoBuscaDTO] = []
+    @State private var professores: [ProfessorListDTO] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showCreateAluno = false
     @State private var showCreateMateria = false
+    @State private var showCreateProfessor = false
+    @State private var showCreateTurma = false
     @State private var confirmDelete = false
 
     var body: some View {
@@ -224,14 +228,20 @@ struct CursoDetailView: View {
                     Section {
                         Button {
                             switch tab {
-                            case .materias: showCreateMateria = true
-                            case .turmas, .alunos: showCreateAluno = true
+                            case .materias:    showCreateMateria = true
+                            case .professores: showCreateProfessor = true
+                            case .turmas:      showCreateTurma = true
+                            case .alunos:      showCreateAluno = true
                             }
                         } label: {
                             switch tab {
                             case .materias:
                                 Label("Nova matéria", systemImage: AppIcons.doc)
-                            case .turmas, .alunos:
+                            case .professores:
+                                Label("Novo professor", systemImage: AppIcons.person)
+                            case .turmas:
+                                Label("Nova turma", systemImage: AppIcons.classes)
+                            case .alunos:
                                 Label("Novo aluno", systemImage: AppIcons.people)
                             }
                         }
@@ -265,6 +275,16 @@ struct CursoDetailView: View {
         }
         .sheet(isPresented: $showCreateMateria) {
             CreateMateriaForCursoSheet(cursoId: curso.id) {
+                Task { await load() }
+            }
+        }
+        .sheet(isPresented: $showCreateProfessor) {
+            CadastrarProfessorSheet {
+                Task { await load() }
+            }
+        }
+        .sheet(isPresented: $showCreateTurma) {
+            NovaTurmaSheet(curso: curso) {
                 Task { await load() }
             }
         }
@@ -308,6 +328,10 @@ struct CursoDetailView: View {
                 Divider().frame(height: 28)
                 Spacer()
                 StatPill(value: "\(grupos.count)", label: "turmas")
+                Spacer()
+                Divider().frame(height: 28)
+                Spacer()
+                StatPill(value: "\(professores.count)", label: "profs")
             }
         }
         .padding(AppDimens.spacingXL)
@@ -329,11 +353,49 @@ struct CursoDetailView: View {
                 .padding(.vertical, AppDimens.spacingXXL)
         } else {
             switch tab {
-            case .materias: materiasTab
-            case .turmas:   turmasTab
-            case .alunos:   alunosTab
+            case .materias:    materiasTab
+            case .turmas:      turmasTab
+            case .alunos:      alunosTab
+            case .professores: professoresTab
             }
         }
+    }
+
+    @ViewBuilder private var professoresTab: some View {
+        if professores.isEmpty {
+            EmptyState(icon: AppIcons.person,
+                       title: "Nenhum professor associado",
+                       subtitle: "Cadastre um professor e associe-o a uma matéria.")
+        } else {
+            LazyVStack(spacing: AppDimens.spacingSM) {
+                ForEach(professores) { p in
+                    professorRow(p)
+                }
+            }
+        }
+    }
+
+    private func professorRow(_ p: ProfessorListDTO) -> some View {
+        HStack(spacing: AppDimens.spacingMD) {
+            Avatar(initials: initialsOf(p.nome), size: 40)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(p.nome)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                HStack(spacing: 4) {
+                    if let ra = p.ra, !ra.isEmpty { Text("RA \(ra)") }
+                    if let dep = p.department, !dep.isEmpty {
+                        Text("·").foregroundStyle(AppColors.textTertiary)
+                        Text(dep)
+                    }
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(AppColors.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(AppDimens.spacingLG)
+        .minimalCard()
     }
 
     @ViewBuilder private var materiasTab: some View {
@@ -456,14 +518,14 @@ struct CursoDetailView: View {
         isLoading = true
         defer { isLoading = false }
         errorMessage = nil
-        // Carrega cada lista independentemente — falha em uma não esconde as outras
-        // nem polui a UI com banner de erro quando há dados parciais.
         do { grupos = try await CoordenacaoService.listarGrupos(cursoId: curso.id) }
         catch { grupos = [] }
         do { materias = try await CoordenacaoService.listarMaterias(cursoId: curso.id) }
         catch { materias = [] }
         do { alunos = try await CoordenacaoService.alunosDoCurso(cursoId: curso.id) }
         catch { alunos = [] }
+        do { professores = try await CoordenacaoService.professoresDoCurso(cursoId: curso.id) }
+        catch { professores = [] }
     }
 }
 

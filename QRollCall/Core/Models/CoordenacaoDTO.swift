@@ -221,6 +221,17 @@ struct RegisterAlunoFormDTO: Encodable {
     let cursoId: Int64?
 }
 
+// MARK: - Professor register (pela coordenação)
+
+struct RegisterProfessorFormDTO: Encodable {
+    let username: String
+    let email: String
+    let password: String
+    let raProfessor: String
+    let periodoIds: [Int64]
+    let materiaIds: [Int64]
+}
+
 // MARK: - Abono
 
 struct AbonoRequestDTO: Encodable {

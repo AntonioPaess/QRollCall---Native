@@ -16,6 +16,9 @@ struct ChamadaCreatedDTO: Decodable {
     let idChamada: Int64
     let idQrcode: String
     let codigo: String
+    let beaconUuid: String
+    let beaconMajor: Int
+    let beaconMinor: Int
 }
 
 struct ChamadaStateDTO: Decodable {
@@ -47,11 +50,14 @@ struct EncerrarComResumoDTO: Encodable {
     let alunosAusentes: [Int64]
 }
 
+/// Payload de registro de presença.
+/// `beaconProximity` é uma das strings reconhecidas pelo backend: "immediate", "near", "far", "unknown".
+/// `beaconAccuracy` é a distância estimada em metros vinda do `CLBeacon.accuracy` (negativo = unknown).
 struct PresencaRequestDTO: Encodable {
     let qrcodeId: String
     let faceVerified: Bool
-    let latitude: Double
-    let longitude: Double
+    let beaconProximity: String
+    let beaconAccuracy: Double
     let codigo: String
 }
 
@@ -63,7 +69,7 @@ struct PresencaResponseDTO: Decodable {
     struct Verificacoes: Decodable {
         let facial: Bool
         let codigo: Bool
-        let localizacao: Bool
+        let proximidade: Bool
         let horario: Bool
     }
 }
@@ -73,8 +79,8 @@ struct VerificarCodigoRequestDTO: Encodable {
     let codigo: String
 }
 
-struct VerificarLocalizacaoRequestDTO: Encodable {
+struct VerificarProximidadeRequestDTO: Encodable {
     let qrcodeId: String
-    let latitude: Double
-    let longitude: Double
+    let beaconProximity: String
+    let beaconAccuracy: Double
 }

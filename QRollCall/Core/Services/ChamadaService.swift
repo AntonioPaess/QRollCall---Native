@@ -28,6 +28,14 @@ struct ChamadaService {
         try await APIClient.shared.request("/api/chamada/verificar/\(qrcodeId)",
                                            authenticated: false)
     }
+
+    /// Heartbeat do prof: sinaliza ao backend que o app está vivo e transmitindo.
+    /// Backend bloqueia novas presenças se não receber por > 15s.
+    static func heartbeat(_ idChamada: Int64) async throws {
+        _ = try await APIClient.shared.send("/api/chamada/\(idChamada)/heartbeat",
+                                            method: .post,
+                                            body: Optional<String>.none)
+    }
 }
 
 @MainActor
@@ -44,14 +52,19 @@ struct PresencaService {
                                            body: dto)
     }
 
-    static func verificarLocalizacao(qrcodeId: String, latitude: Double, longitude: Double) async throws -> Bool {
+    /// Pré-check de proximidade — antes de pedir Face ID etc.
+    /// Retorna `true` se o aluno está dentro do raio do beacon do prof e a chamada
+    /// está ativa (heartbeat recente). Retorna `false` se 403 ou unauthorized.
+    static func verificarProximidade(qrcodeId: String,
+                                     proximity: String,
+                                     accuracy: Double) async throws -> Bool {
         do {
-            _ = try await APIClient.shared.send("/api/presenca/verifica-localizacao",
+            _ = try await APIClient.shared.send("/api/presenca/verifica-proximidade",
                                                  method: .post,
-                                                 body: VerificarLocalizacaoRequestDTO(
+                                                 body: VerificarProximidadeRequestDTO(
                                                     qrcodeId: qrcodeId,
-                                                    latitude: latitude,
-                                                    longitude: longitude
+                                                    beaconProximity: proximity,
+                                                    beaconAccuracy: accuracy
                                                  ))
             return true
         } catch APIError.server(let status, _) where status == 403 {

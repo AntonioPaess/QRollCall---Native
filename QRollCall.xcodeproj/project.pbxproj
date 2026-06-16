@@ -400,10 +400,12 @@
 				DEVELOPMENT_TEAM = QX5CMT2GV8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Precisamos do Bluetooth para validar sua proximidade com o professor durante a chamada.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Usamos Face ID para confirmar sua presença em chamadas.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Usamos sua localização para validar se você está na sala de aula.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Usamos sua localização para detectar o sinal Bluetooth do professor durante a chamada (não rastreamos sua posição).";
 				INFOPLIST_KEY_QRollCallAPIBaseURL = "http://localhost:8080";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-peripheral";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -435,10 +437,12 @@
 				DEVELOPMENT_TEAM = QX5CMT2GV8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Precisamos do Bluetooth para validar sua proximidade com o professor durante a chamada.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Usamos Face ID para confirmar sua presença em chamadas.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Usamos sua localização para validar se você está na sala de aula.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Usamos sua localização para detectar o sinal Bluetooth do professor durante a chamada (não rastreamos sua posição).";
 				INFOPLIST_KEY_QRollCallAPIBaseURL = "http://localhost:8080";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-peripheral";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

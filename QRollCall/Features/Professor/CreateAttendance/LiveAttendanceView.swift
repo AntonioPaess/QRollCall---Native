@@ -18,6 +18,10 @@ struct LiveAttendanceView: View {
     let durationMinutes: Int
 
     @State private var showSummary = false
+    @State private var hasStarted = false
+    @State private var ackPhoneStaysUnlocked = false
+    @State private var ackBluetoothReady = false
+    @State private var ackStayInApp = false
 
     init(chamada: ChamadaCreatedDTO,
          turmaNome: String,
@@ -30,7 +34,7 @@ struct LiveAttendanceView: View {
         self.totalStudents = totalStudents
         self.durationMinutes = durationMinutes
         _viewModel = StateObject(wrappedValue: LiveAttendanceViewModel(
-            idChamada: chamada.idChamada,
+            chamada: chamada,
             totalStudents: totalStudents,
             durationMinutes: durationMinutes
         ))
@@ -38,16 +42,12 @@ struct LiveAttendanceView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                statusHeader
-                if let msg = viewModel.errorMessage {
-                    Text(msg)
-                        .font(.system(size: AppDimens.fontCaption))
-                        .foregroundColor(AppColors.error)
-                        .padding(.horizontal, AppDimens.spacingXXL)
+            ZStack {
+                if hasStarted {
+                    liveContent
+                } else {
+                    preflightChecklist
                 }
-                confirmedList
-                closeButton
             }
             .background(AppColors.background)
             .navigationTitle(AppStrings.liveAttendanceTitle)
@@ -63,7 +63,6 @@ struct LiveAttendanceView: View {
                     }
                 }
             }
-            .onAppear { viewModel.start() }
             .onDisappear { viewModel.stop() }
             .fullScreenCover(isPresented: $showSummary) {
                 AttendanceSummaryView(
@@ -74,6 +73,168 @@ struct LiveAttendanceView: View {
                     totalStudents: viewModel.totalStudents
                 )
             }
+            .alert(AppStrings.liveInterruptionAlertTitle,
+                   isPresented: $viewModel.didInterruptBroadcast,
+                   actions: {
+                       Button(AppStrings.liveInterruptionAlertConfirm, role: .cancel) {
+                           viewModel.acknowledgeInterruption()
+                       }
+                   },
+                   message: {
+                       Text(AppStrings.liveInterruptionAlertMessage)
+                   })
+        }
+    }
+
+    // MARK: - Pre-flight checklist
+
+    private var preflightChecklist: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppDimens.spacingXL) {
+                VStack(alignment: .leading, spacing: AppDimens.spacingSM) {
+                    Text(AppStrings.livePreflightTitle)
+                        .font(.system(size: AppDimens.fontTitle1, weight: .bold))
+                        .foregroundColor(AppColors.textPrimary)
+                    Text(AppStrings.livePreflightSubtitle)
+                        .font(.system(size: AppDimens.fontBody))
+                        .foregroundColor(AppColors.textSecondary)
+                }
+
+                VStack(spacing: AppDimens.spacingMD) {
+                    checklistRow(text: AppStrings.livePreflightCheckBluetooth,
+                                 isChecked: $ackBluetoothReady)
+                    checklistRow(text: AppStrings.livePreflightCheckUnlocked,
+                                 isChecked: $ackPhoneStaysUnlocked)
+                    checklistRow(text: AppStrings.livePreflightCheckStayInApp,
+                                 isChecked: $ackStayInApp)
+                }
+
+                criticalNotice
+
+                Button {
+                    hasStarted = true
+                    viewModel.start()
+                } label: {
+                    Text(AppStrings.livePreflightStartCTA)
+                        .font(.system(size: AppDimens.fontTitle3, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: AppDimens.buttonHeight)
+                        .background(allChecked ? AppColors.primary : AppColors.surfaceMuted)
+                        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
+                }
+                .buttonStyle(.plain)
+                .disabled(!allChecked)
+            }
+            .padding(AppDimens.spacingXXL)
+        }
+    }
+
+    private func checklistRow(text: String, isChecked: Binding<Bool>) -> some View {
+        Button {
+            isChecked.wrappedValue.toggle()
+        } label: {
+            HStack(spacing: AppDimens.spacingMD) {
+                Image(systemName: isChecked.wrappedValue ? AppIcons.checkboxFilled : AppIcons.checkboxEmpty)
+                    .font(.system(size: AppDimens.iconLG))
+                    .foregroundColor(isChecked.wrappedValue ? AppColors.success : AppColors.textTertiary)
+                Text(text)
+                    .font(.system(size: AppDimens.fontBody))
+                    .foregroundColor(AppColors.textPrimary)
+                    .multilineTextAlignment(.leading)
+                Spacer()
+            }
+            .padding(AppDimens.spacingMD)
+            .background(AppColors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusSM))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var criticalNotice: some View {
+        HStack(alignment: .top, spacing: AppDimens.spacingSM) {
+            Image(systemName: AppIcons.exclamation)
+                .foregroundColor(AppColors.danger)
+            Text(AppStrings.livePreflightCriticalNotice)
+                .font(.system(size: AppDimens.fontCaption))
+                .foregroundColor(AppColors.danger)
+        }
+        .padding(AppDimens.spacingMD)
+        .background(AppColors.danger.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusSM))
+    }
+
+    private var allChecked: Bool {
+        ackBluetoothReady && ackPhoneStaysUnlocked && ackStayInApp
+    }
+
+    // MARK: - Live content
+
+    private var liveContent: some View {
+        VStack(spacing: 0) {
+            broadcastBanner
+            statusHeader
+            if let msg = viewModel.errorMessage {
+                Text(msg)
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.danger)
+                    .padding(.horizontal, AppDimens.spacingXXL)
+            }
+            confirmedList
+            closeButton
+        }
+    }
+
+    private var broadcastBanner: some View {
+        HStack(spacing: AppDimens.spacingSM) {
+            Image(systemName: AppIcons.bluetoothOn)
+                .font(.system(size: AppDimens.iconMD))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AppStrings.liveBroadcastBannerTitle)
+                    .font(.system(size: AppDimens.fontSmall, weight: .semibold))
+                Text(AppStrings.liveBroadcastBannerSubtitle)
+                    .font(.system(size: AppDimens.fontCaption))
+                    .opacity(0.85)
+            }
+            Spacer()
+            broadcastStatusBadge
+        }
+        .foregroundColor(.white)
+        .padding(AppDimens.spacingMD)
+        .frame(maxWidth: .infinity)
+        .background(broadcastBannerColor)
+    }
+
+    private var broadcastStatusBadge: some View {
+        Group {
+            switch viewModel.broadcaster.state {
+            case .advertising:
+                Text(AppStrings.liveBroadcastBadgeActive)
+                    .font(.system(size: AppDimens.fontCaption, weight: .bold))
+            case .waitingForBluetooth, .idle:
+                Text(AppStrings.liveBroadcastBadgeWaiting)
+                    .font(.system(size: AppDimens.fontCaption, weight: .bold))
+            case .failed(let msg):
+                Text(msg.uppercased())
+                    .font(.system(size: AppDimens.fontCaption, weight: .bold))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, AppDimens.spacingSM)
+        .padding(.vertical, 2)
+        .background(.white.opacity(0.2))
+        .clipShape(Capsule())
+    }
+
+    /// Cor do banner segue a semântica do design system:
+    /// - `success` quando transmitindo (estado-objetivo atingido).
+    /// - `warning` enquanto aguardando o BT estar pronto (atenção, não erro).
+    /// - `danger` em falha (BT desligado / permissão negada).
+    private var broadcastBannerColor: Color {
+        switch viewModel.broadcaster.state {
+        case .advertising:                  return AppColors.success
+        case .waitingForBluetooth, .idle:   return AppColors.warning
+        case .failed:                       return AppColors.danger
         }
     }
 
@@ -125,10 +286,10 @@ struct LiveAttendanceView: View {
             HStack(spacing: AppDimens.spacingXS) {
                 Image(systemName: AppIcons.timer)
                     .font(.system(size: AppDimens.iconSM))
-                    .foregroundColor(viewModel.timeRemaining < 60 ? AppColors.error : AppColors.textSecondary)
+                    .foregroundColor(viewModel.timeRemaining < 60 ? AppColors.danger : AppColors.textSecondary)
                 Text(formatTime(viewModel.timeRemaining))
                     .font(.system(size: AppDimens.fontCallout, weight: .medium))
-                    .foregroundColor(viewModel.timeRemaining < 60 ? AppColors.error : AppColors.textSecondary)
+                    .foregroundColor(viewModel.timeRemaining < 60 ? AppColors.danger : AppColors.textSecondary)
             }
         }
         .padding(AppDimens.spacingXXL)
@@ -201,7 +362,7 @@ struct LiveAttendanceView: View {
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .frame(height: AppDimens.buttonHeight)
-            .background(AppColors.error)
+            .background(AppColors.danger)
             .clipShape(RoundedRectangle(cornerRadius: AppDimens.radiusMD))
         }
         .buttonStyle(.plain)

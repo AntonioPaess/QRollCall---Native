@@ -6,6 +6,6 @@ enum APIConfig {
            let url = URL(string: urlString) {
             return url
         }
-        return URL(string: "http://localhost:8080")!
+        return URL(string: "https://137.131.230.45.sslip.io")!
     }()
 }

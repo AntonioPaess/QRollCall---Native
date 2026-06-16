@@ -111,6 +111,26 @@ enum AppStrings {
     static let closeAttendance = "Encerrar Chamada"
     static let timeRemaining = "Tempo restante"
 
+    // Preflight (antes de iniciar a transmissão)
+    static let livePreflightTitle = "Antes de iniciar"
+    static let livePreflightSubtitle = "A chamada usa Bluetooth para validar a proximidade dos alunos. Confirme cada item — sem isso, a chamada pode falhar."
+    static let livePreflightCheckBluetooth = "Estou em local com Bluetooth ligado e bateria suficiente."
+    static let livePreflightCheckUnlocked = "Vou manter este telefone DESBLOQUEADO durante toda a chamada."
+    static let livePreflightCheckStayInApp = "Não vou trocar de app ou minimizar enquanto a chamada estiver aberta."
+    static let livePreflightCriticalNotice = "Se você bloquear a tela, trocar de app ou se afastar, os alunos não conseguirão registrar presença."
+    static let livePreflightStartCTA = "Iniciar transmissão"
+
+    // Banner persistente durante a transmissão
+    static let liveBroadcastBannerTitle = "Transmitindo proximidade"
+    static let liveBroadcastBannerSubtitle = "Mantenha o telefone desbloqueado e o app aberto"
+    static let liveBroadcastBadgeActive = "ATIVO"
+    static let liveBroadcastBadgeWaiting = "AGUARDANDO"
+
+    // Alerta de interrupção
+    static let liveInterruptionAlertTitle = "Chamada interrompida"
+    static let liveInterruptionAlertMessage = "O app saiu do primeiro plano. Enquanto não voltar, alunos podem ficar sem detectar o sinal. NÃO bloqueie o telefone — mantenha esta tela ativa até encerrar a chamada."
+    static let liveInterruptionAlertConfirm = "Entendi"
+
     // MARK: - Attendance Summary
 
     static let summaryTitle = "Resumo da Chamada"
@@ -143,7 +163,7 @@ enum AppStrings {
     // MARK: - Student Attendance
 
     static let outOfRangeTitle = "Fora do alcance"
-    static let outOfRangeMessage = "Você está fora do alcance da sala de aula.\nAproxime-se para registrar sua presença."
+    static let outOfRangeMessage = "Você não está perto o suficiente do professor.\nAproxime-se e tente novamente em alguns segundos."
     static let tryAgain = "Tentar novamente"
     static let gamificationTitle = "Prove que você está na aula!"
     static let gamificationSubtitle = "Selecione as palavras relacionadas ao tema da aula"

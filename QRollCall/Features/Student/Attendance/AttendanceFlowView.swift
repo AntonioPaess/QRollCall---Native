@@ -201,6 +201,9 @@ struct AttendanceFlowView: View {
         startTime: "10:00",
         timeRemainingSec: 600,
         jaRegistrouPresenca: false,
-        keywords: ["HTML", "CSS", "JavaScript", "React"]
+        keywords: ["HTML", "CSS", "JavaScript", "React"],
+        beaconUuid: UUID().uuidString,
+        beaconMajor: 1,
+        beaconMinor: 1
     ))
 }

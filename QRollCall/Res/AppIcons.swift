@@ -56,6 +56,8 @@ enum AppIcons {
     static let checkmarkSeal = "checkmark.seal.fill"
     static let xmarkSeal = "xmark.seal.fill"
     static let arrowBack = "arrow.left"
+    static let checkboxFilled = "checkmark.square.fill"
+    static let checkboxEmpty = "square"
 
     // MARK: - Profile
 

@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import CoreLocation
 
 @MainActor
 final class AttendanceFlowViewModel: ObservableObject {
@@ -29,7 +28,7 @@ final class AttendanceFlowViewModel: ObservableObject {
         guard let v = verificacoes else { return [] }
         var reasons: [String] = []
         if !v.codigo { reasons.append("Código incorreto") }
-        if !v.localizacao { reasons.append("Localização fora do raio") }
+        if !v.proximidade { reasons.append("Fora do alcance do professor") }
         if !v.facial { reasons.append("Face ID não validou") }
         if !v.horario { reasons.append("Fora do horário da chamada") }
         return reasons
@@ -40,8 +39,10 @@ final class AttendanceFlowViewModel: ObservableObject {
     let hasGamification: Bool
 
     private var startTime: Date?
-    private var coordinate: CLLocationCoordinate2D?
+    private var beaconProximity: String = "unknown"
+    private var beaconAccuracy: Double = -1
     private var faceIDInFlight = false
+    private let ranger: BeaconRanger
 
     init(chamada: ChamadaAtivaDTO) {
         self.chamada = chamada
@@ -56,30 +57,48 @@ final class AttendanceFlowViewModel: ObservableObject {
             let distractors = AttendanceFlowViewModel.randomDistractors(excluding: real, count: max(real.count, 4))
             self.allWords = (real + distractors).shuffled()
         }
+        self.ranger = BeaconRanger()
     }
 
     func bootstrap() async {
-        do {
-            let coord = try await LocationProvider.shared.requestCoordinate()
-            self.coordinate = coord
-            let ok = try await PresencaService.verificarLocalizacao(
+        guard let beaconUuidStr = chamada.beaconUuid,
+              let beaconUuid = UUID(uuidString: beaconUuidStr) else {
+            // Chamada sem beacon configurado — não dá pra validar proximidade.
+            phase = .error("Chamada sem beacon configurado. Peça ao professor para abrir novamente.")
+            return
+        }
+
+        let major: UInt16? = chamada.beaconMajor.flatMap { UInt16(exactly: $0) }
+        let minor: UInt16? = chamada.beaconMinor.flatMap { UInt16(exactly: $0) }
+
+        let result = await ranger.scan(uuid: beaconUuid, major: major, minor: minor)
+
+        switch result {
+        case .success(let reading):
+            self.beaconProximity = reading.proximity
+            self.beaconAccuracy = reading.accuracy
+            let ok = try? await PresencaService.verificarProximidade(
                 qrcodeId: chamada.idQrcode,
-                latitude: coord.latitude,
-                longitude: coord.longitude
+                proximity: reading.proximity,
+                accuracy: reading.accuracy
             )
-            if !ok {
+            if ok == true {
+                advancePastProximity()
+            } else {
                 phase = .outOfRange
-                return
             }
-            advancePastLocation()
-        } catch {
-            // sem permissão / falha — segue com (0,0) para o backend decidir
-            self.coordinate = CLLocationCoordinate2D(latitude: 0, longitude: 0)
-            advancePastLocation()
+        case .timeout(let reading):
+            self.beaconProximity = reading.proximity
+            self.beaconAccuracy = reading.accuracy
+            phase = .outOfRange
+        case .denied:
+            phase = .error("Permissão de localização negada — habilite nos Ajustes para validar proximidade.")
+        case .unsupported(let msg):
+            phase = .error("Bluetooth indisponível: \(msg)")
         }
     }
 
-    private func advancePastLocation() {
+    private func advancePastProximity() {
         startTime = Date()
         phase = hasGamification ? .gamification : .codeEntry
     }
@@ -120,14 +139,13 @@ final class AttendanceFlowViewModel: ObservableObject {
     }
 
     private func submit(faceVerified: Bool) async {
-        let coord = coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
         phase = .submitting
         do {
             let dto = PresencaRequestDTO(
                 qrcodeId: chamada.idQrcode,
                 faceVerified: faceVerified,
-                latitude: coord.latitude,
-                longitude: coord.longitude,
+                beaconProximity: beaconProximity,
+                beaconAccuracy: beaconAccuracy,
                 codigo: codeInput.trimmingCharacters(in: .whitespaces)
             )
             let response = try await PresencaService.registrar(dto)
@@ -139,6 +157,9 @@ final class AttendanceFlowViewModel: ObservableObject {
             phase = .confirmed
         } catch is CancellationError {
             return
+        } catch APIError.server(let status, let message) where status == 409 {
+            // Backend bloqueou: chamada interrompida (heartbeat stale).
+            phase = .error(message ?? "Chamada interrompida — peça ao professor para reabrir o app.")
         } catch {
             phase = .error((error as? LocalizedError)?.errorDescription ?? "Falha ao registrar presença.")
         }
